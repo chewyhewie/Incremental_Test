@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viral Load</title>
+  <meta name="description" content="An idle game about a very small virus with very big ambitions.">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Pinned: all resource amounts and costs use Decimal. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/break_infinity.js@2.2.0/dist/break_infinity.min.js"></script>
+  <script defer src="js/config.js"></script>
+  <script defer src="js/state.js"></script>
+  <script defer src="js/loop.js"></script>
+  <script defer src="js/save.js"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/main.js"></script>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Viral Load</h1>
+      <p class="tagline">Petri dish #37. Nobody's watching. Multiply.</p>
+    </header>
+
+    <div id="notice" class="notice" hidden>
+      <span id="notice-text"></span>
+      <button id="notice-dismiss" type="button" class="link-btn" aria-label="Dismiss">Dismiss</button>
+    </div>
+
+    <section class="dish" aria-live="polite">
+      <div class="dish-label">Virions</div>
+      <div id="virions" class="dish-count">0</div>
+      <div id="per-sec" class="dish-rate">0 / sec</div>
+    </section>
+
+    <section class="panel">
+      <h2>Class I Hosts <span class="sub">infected bacteria</span></h2>
+      <div id="generator-list" class="list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Mutations <span class="sub">one-time upgrades</span></h2>
+      <div id="upgrade-list" class="list"></div>
+    </section>
+
+    <details class="panel settings">
+      <summary>Settings</summary>
+      <div class="settings-row">
+        <button id="export-btn" type="button">Export Save</button>
+        <button id="import-btn" type="button">Import Save</button>
+        <button id="reset-btn" type="button" class="danger">Hard Reset</button>
+      </div>
+      <textarea id="save-text" rows="3" placeholder="Paste a save here, then press Import Save." spellcheck="false"></textarea>
+      <p id="settings-message" class="settings-message"></p>
+      <p class="settings-note">Autosaves every 30 seconds and when you close the page.</p>
+    </details>
+  </main>
+</body>
+</html>
