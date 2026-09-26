@@ -26,7 +26,8 @@ petri dish, trying to multiply as much as possible.
 - `js/save.js`: save/load, offline progress, export/import, hard reset, migrations
 - `js/ui.js`: `buildUI()`, `render()`, number formatting, settings handlers
 - `js/main.js`: startup
-- `docs/roadmap.md`: future ideas
+- `docs/roadmap.md`: future ideas for use and to be maintained by Claude
+- `docs/todo.md`: notes for use and to be maintained by user. This file should NOT be edited by Claude, but it should be merged in all commits.
 
 ## Rules
 1. **One state object.** All persistent game state lives in `state`
