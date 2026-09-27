@@ -18,7 +18,9 @@ petri dish, trying to multiply as much as possible.
 - Scripts are plain `<script defer>` tags sharing globals (no ES modules).
   Load order in `index.html` matters.
 - **break_infinity.js** (pinned `@2.2.0` via jsDelivr) for every resource
-  amount and cost. Never use plain JS numbers for virions or costs.
+  amount and cost. Never use plain JS numbers for virions, costs, or any
+  multiplier raised to an owned count — `Math.pow(1.1, 10000)` is `Infinity`,
+  silently. Use `Decimal.pow`.
 
 ## File layout
 - `index.html`: markup and script tags
@@ -53,11 +55,14 @@ petri dish, trying to multiply as much as possible.
 6. **Unlocks:** a generator becomes visible once virions reach 50% of its
    current cost (after cost Mutations), an upgrade at 25% of its cost; the
    `unlocked` flag is saved so it stays visible.
+   **Owned implies unlocked:** `buyUpgrade` refuses a hidden Mutation, and
+   loading forces `unlocked` when `owned`. Anything that grants a Mutation
+   (prestige perks, achievements) must set both flags, or `render()` hides
+   what the player owns.
 7. **Number format:** plain numbers below 1e6, then `1.23e6` (`formatNumber`).
 8. **Saving:** localStorage, base64 JSON, Decimals stored as strings. Save
-   has `version` and `lastSaved`. Autosave every 30s, on `beforeunload`, and
-   when the tab is hidden. When changing the save shape, bump
-   `CONFIG.saveVersion` and add a step in `migrateSave()`.
+   has `version` and `lastSaved`. Autosave every 30s. When changing the save
+   shape, bump `CONFIG.saveVersion` and add a step in `migrateSave()`.
 9. **Offline progress** = production × time since `lastSaved`, capped at 8h,
    reported in the "While you were away..." notice.
 10. There is no click-to-earn action by design.
