@@ -152,8 +152,22 @@ button:disabled {
 
 .danger { background: transparent; color: var(--danger); border-color: var(--danger); box-shadow: none; }
 
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--panel-border);
+  box-shadow: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--teal);
+  border-color: var(--teal);
+  box-shadow: 0 0 10px rgba(45, 224, 210, 0.3);
+}
+
 /* ---------- Settings ---------- */
-.settings summary { cursor: pointer; color: var(--teal); font-weight: 600; }
 .settings-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .settings textarea {
   width: 100%;
@@ -172,4 +186,5 @@ button:disabled {
 @media (max-width: 480px) {
   .card { flex-direction: column; align-items: stretch; }
   .buy { width: 100%; }
+  .tab { flex: 1; padding: 8px 6px; }
 }

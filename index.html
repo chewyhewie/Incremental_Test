@@ -34,18 +34,24 @@
       <div id="per-sec" class="dish-rate">0 / sec</div>
     </section>
 
-    <section class="panel">
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" aria-selected="false" class="tab" data-tab="generators" aria-controls="tab-generators">Hosts</button>
+      <button type="button" role="tab" aria-selected="false" class="tab" data-tab="upgrades" aria-controls="tab-upgrades">Mutations</button>
+      <button type="button" role="tab" aria-selected="false" class="tab" data-tab="settings" aria-controls="tab-settings">Settings</button>
+    </nav>
+
+    <section id="tab-generators" class="panel" role="tabpanel" data-tab-panel="generators">
       <h2>Class I Hosts <span class="sub">infected bacteria</span></h2>
       <div id="generator-list" class="list"></div>
     </section>
 
-    <section class="panel">
+    <section id="tab-upgrades" class="panel" role="tabpanel" data-tab-panel="upgrades" hidden>
       <h2>Mutations <span class="sub">one-time upgrades</span></h2>
       <div id="upgrade-list" class="list"></div>
     </section>
 
-    <details class="panel settings">
-      <summary>Settings</summary>
+    <section id="tab-settings" class="panel settings" role="tabpanel" data-tab-panel="settings" hidden>
+      <h2>Settings</h2>
       <div class="settings-row">
         <button id="export-btn" type="button">Export Save</button>
         <button id="import-btn" type="button">Import Save</button>
@@ -54,7 +60,7 @@
       <textarea id="save-text" rows="3" placeholder="Paste a save here, then press Import Save." spellcheck="false"></textarea>
       <p id="settings-message" class="settings-message"></p>
       <p class="settings-note">Autosaves every 30 seconds and when you close the page.</p>
-    </details>
+    </section>
   </main>
 </body>
 </html>

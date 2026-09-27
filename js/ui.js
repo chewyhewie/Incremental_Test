@@ -4,11 +4,14 @@
 const uiState = {
   notice: null,          // "While you were away..." text, or null
   settingsMessage: "",
+  activeTab: "generators", // "generators" | "upgrades" | "settings"
 };
 
 const els = {
   generators: {},
   upgrades: {},
+  tabs: {},       // tab key -> tab button
+  tabPanels: {},  // tab key -> panel section
 };
 
 // ---------- Formatting ----------
@@ -61,6 +64,16 @@ function buildUI() {
   els.noticeText = document.getElementById("notice-text");
   els.settingsMessage = document.getElementById("settings-message");
   els.saveText = document.getElementById("save-text");
+
+  for (const tab of document.querySelectorAll("[data-tab]")) {
+    const key = tab.dataset.tab;
+    els.tabs[key] = tab;
+    els.tabPanels[key] = document.querySelector(`[data-tab-panel="${key}"]`);
+    tab.addEventListener("click", () => {
+      uiState.activeTab = key;
+      render();
+    });
+  }
 
   const genList = document.getElementById("generator-list");
   for (const gen of CONFIG.generators) {
@@ -162,6 +175,16 @@ function offlineMessage({ seconds, gained, capped }) {
 function render() {
   setText(els.virions, formatNumber(state.virions));
   setText(els.perSec, `${formatRate(getTotalPerSec())} / sec`);
+
+  for (const key in els.tabs) {
+    const active = key === uiState.activeTab;
+    const tab = els.tabs[key];
+    if (tab.classList.contains("active") !== active) {
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+    }
+    if (els.tabPanels[key].hidden === active) els.tabPanels[key].hidden = !active;
+  }
 
   for (const gen of CONFIG.generators) {
     const g = state.generators[gen.id];

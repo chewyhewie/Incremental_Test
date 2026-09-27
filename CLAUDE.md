@@ -31,7 +31,7 @@ petri dish, trying to multiply as much as possible.
 
 ## Rules
 1. **One state object.** All persistent game state lives in `state`
-   (`state.js`). Transient UI-only data (messages) lives in `uiState` (`ui.js`)
+   (`state.js`). Transient UI-only data (messages, active tab) lives in `uiState` (`ui.js`)
    and is never saved.
 2. **Only `render()` updates the screen.** It runs ~10×/sec from the loop.
    Event handlers change state, then call `render()`. `buildUI()` creates DOM
