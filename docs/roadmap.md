@@ -8,8 +8,16 @@ Ideas for after the prototype. Not in priority order.
 - [ ] RP shop with permanent perks (starting virions, cheaper hosts, faster offline gains)
 - [ ] Track lifetime stats across resets
 
+## Replication speed (tickspeed), after prestige
+Only meaningful once production compounds; with flat per-host rates it equals an output multiplier.
+- [ ] Compounding production: higher-class hosts spawn lower-class hosts, and/or virion growth proportional to current virions
+- [ ] `getTickspeed()` scales the dt fed to production only (`produce(dt * tickspeed)`); event/buff timers stay on real time
+- [ ] New Mutation `effect.kind: "speed"`; consider converting Rapid Translation to it
+- [ ] Offline progress must use the same scaled time (closed form or chunked simulation); `rate × seconds` no longer works
+- [ ] Save-shape change: bump `CONFIG.saveVersion` and add a `migrateSave()` step
+
 ## More generators
-- [ ] More Class I hosts (e.g. Staphylococcus, Pseudomonas, Streptococcus)
+- [ ] More Class I hosts beyond N. meningitidis (e.g. Staphylococcus, Pseudomonas, Streptococcus)
 - [ ] Class II hosts (e.g. protists / amoebae) with their own upgrade line
 - [ ] Class III hosts (e.g. lab mice?), gated behind prestige
 - [ ] Per-generator milestone bonuses (e.g. ×2 at 25 / 50 / 100 owned)

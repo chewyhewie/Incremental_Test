@@ -19,7 +19,11 @@ function deserializeState(data) {
 
   const s = newState();
   const virions = new Decimal(data.virions);
-  if (!Number.isFinite(virions.mantissa)) throw new Error("Invalid virions value");
+  // NaN shows up as a non-finite mantissa, but break_infinity stores infinities
+  // as a finite mantissa with a sentinel exponent, so check the magnitude too.
+  if (!Number.isFinite(virions.mantissa) || virions.abs().gte(Decimal.MAX_VALUE)) {
+    throw new Error("Invalid virions value");
+  }
   s.virions = virions;
   s.lastSaved = Number.isFinite(data.lastSaved) ? data.lastSaved : Date.now();
 
@@ -31,7 +35,12 @@ function deserializeState(data) {
     }
   }
   for (const id in s.upgrades) {
-    s.upgrades[id] = !!(data.upgrades && data.upgrades[id]);
+    const u = data.upgrades && data.upgrades[id];
+    if (u) {
+      s.upgrades[id].owned = !!u.owned;
+      // An owned upgrade is always revealed, so a doctored save can't hide one.
+      s.upgrades[id].unlocked = !!u.unlocked || !!u.owned;
+    }
   }
   return s;
 }
@@ -40,7 +49,17 @@ function deserializeState(data) {
 function migrateSave(data) {
   const version = Number(data.version) || 0;
   if (version > CONFIG.saveVersion) throw new Error("Save is from a newer version of the game");
-  // Future: if (version < 2) { ...; data.version = 2; }
+  if (version < 2) {
+    // v1 stored each upgrade as a bare "acquired" boolean; v2 stores
+    // { owned, unlocked }. Anything already acquired counts as revealed.
+    const upgrades = {};
+    for (const id in data.upgrades || {}) {
+      const owned = !!data.upgrades[id];
+      upgrades[id] = { owned, unlocked: owned };
+    }
+    data.upgrades = upgrades;
+    data.version = 2;
+  }
   return data;
 }
 

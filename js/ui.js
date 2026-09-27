@@ -64,6 +64,7 @@ function buildUI() {
   els.noticeText = document.getElementById("notice-text");
   els.settingsMessage = document.getElementById("settings-message");
   els.saveText = document.getElementById("save-text");
+  els.upgradeEmpty = document.getElementById("upgrade-empty");
 
   for (const tab of document.querySelectorAll("[data-tab]")) {
     const key = tab.dataset.tab;
@@ -202,13 +203,19 @@ function render() {
     e.button.disabled = !canAfford(cost);
   }
 
+  let anyUpgradeVisible = false;
   for (const upg of CONFIG.upgrades) {
     const e = els.upgrades[upg.id];
-    const owned = state.upgrades[upg.id];
-    e.row.classList.toggle("owned", owned);
-    setText(e.button, owned ? "Acquired" : `Mutate · ${formatNumber(upg.cost)}`);
-    e.button.disabled = owned || !canAfford(new Decimal(upg.cost));
+    const u = state.upgrades[upg.id];
+    e.row.hidden = !u.unlocked;
+    if (!u.unlocked) continue;
+    anyUpgradeVisible = true;
+
+    e.row.classList.toggle("owned", u.owned);
+    setText(e.button, u.owned ? "Acquired" : `Mutate · ${formatNumber(upg.cost)}`);
+    e.button.disabled = u.owned || !canAfford(new Decimal(upg.cost));
   }
+  els.upgradeEmpty.hidden = anyUpgradeVisible;
 
   els.notice.hidden = !uiState.notice;
   if (uiState.notice) setText(els.noticeText, uiState.notice);

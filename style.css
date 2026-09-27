@@ -97,6 +97,8 @@ body {
 
 .list { display: flex; flex-direction: column; gap: 10px; }
 
+.empty { margin: 0; color: var(--muted); font-size: 0.85rem; font-style: italic; }
+
 .card {
   display: flex;
   gap: 12px;

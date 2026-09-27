@@ -10,8 +10,11 @@ petri dish, trying to multiply as much as possible.
   bacteria), one-time upgrades = **Mutations**.
 
 ## Tech constraints
-- Plain HTML, CSS, JavaScript. No frameworks, npm, bundlers, or build step.
-- Runs as static files on GitHub Pages; develop with VS Code Live Server.
+- The game itself is plain HTML/CSS/JS: no frameworks, no build step.
+  It must run directly from static files via Live Server and GitHub
+  Pages. Never make the game depend on npm or Node.
+- Node/npm are allowed ONLY for developer tools in `tools/`.
+- Run `npm test` after changes to game logic or save format.
 - Scripts are plain `<script defer>` tags sharing globals (no ES modules).
   Load order in `index.html` matters.
 - **break_infinity.js** (pinned `@2.2.0` via jsDelivr) for every resource
@@ -28,6 +31,9 @@ petri dish, trying to multiply as much as possible.
 - `js/main.js`: startup
 - `docs/roadmap.md`: future ideas for use and to be maintained by Claude
 - `docs/todo.md`: notes for use and to be maintained by user. This file should NOT be edited by Claude, but it should be merged in all commits.
+- `tools/`: developer tooling, never shipped. `tools/tests/` is the `npm test`
+  suite (`node:test`, no dependencies); see `tools/README.md`
+- `package.json`: dev-only, holds the `test` script. The game does not use it.
 
 ## Rules
 1. **One state object.** All persistent game state lives in `state`
@@ -41,9 +47,12 @@ petri dish, trying to multiply as much as possible.
 4. **No magic numbers** outside `config.js`. New generators and upgrades are
    added as config entries; the UI builds from config.
 5. **Costs** grow ×1.15 per purchase and are rounded up (`ceil`).
-   Upgrade effects are data (`effect.kind` = `"output"` | `"cost"`).
+   Upgrade effects are data: `effect.kind` = `"output"` | `"cost"` | `"costGrowth"`
+   | `"milestone"`. Targeting is independent of kind — `targetId` hits one
+   generator, `targetClass` a whole class, and neither means global.
 6. **Unlocks:** a generator becomes visible once virions reach 50% of its
-   base cost; the `unlocked` flag is saved so it stays visible.
+   current cost (after cost Mutations), an upgrade at 25% of its cost; the
+   `unlocked` flag is saved so it stays visible.
 7. **Number format:** plain numbers below 1e6, then `1.23e6` (`formatNumber`).
 8. **Saving:** localStorage, base64 JSON, Decimals stored as strings. Save
    has `version` and `lastSaved`. Autosave every 30s, on `beforeunload`, and
