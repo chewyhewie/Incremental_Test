@@ -4,7 +4,9 @@
   "private": true,
   "description": "Developer tooling for Viral Load. The game itself is static files and needs no npm.",
   "scripts": {
-    "test": "node --test \"tools/tests/**/*.test.js\""
+    "test": "node --test \"tools/tests/**/*.test.js\"",
+    "sim": "node tools/sim/sim.js",
+    "tune": "node tools/sim/tune.js"
   },
   "engines": {
     "node": ">=22"

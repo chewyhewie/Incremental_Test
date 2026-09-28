@@ -297,12 +297,14 @@ test("hardReset wipes progress and recomputes what should be visible", () => {
 test("offline progress is production x seconds away", () => {
   const g = loadGame();
   g.reset(0);
-  g.state.generators.ecoli.owned = 10; // 10/s
+  g.state.generators.ecoli.owned = 10;
+  const perSec = g.num(g.fn.getTotalPerSec());
   g.state.lastSaved = Date.now() - 60 * 1000;
   const result = g.fn.applyOfflineProgress();
   assert.ok(result, "a 60s gap is reported");
   assert.ok(Math.abs(result.seconds - 60) < 2, `seconds ~= 60, got ${result.seconds}`);
-  assert.ok(Math.abs(g.num(result.gained) - 600) < 20, `gained ~= 600, got ${g.num(result.gained)}`);
+  const expected = perSec * result.seconds;
+  assert.ok(Math.abs(g.num(result.gained) - expected) < 1e-6 * expected, `gained ~= ${expected}, got ${g.num(result.gained)}`);
   assert.equal(result.capped, false);
 });
 
@@ -314,7 +316,8 @@ test("offline progress is capped, and says so", () => {
   const result = g.fn.applyOfflineProgress();
   assert.equal(result.seconds, g.CONFIG.offlineCapSeconds);
   assert.equal(result.capped, true);
-  assert.equal(g.num(result.gained), g.CONFIG.offlineCapSeconds, "1/s for the capped window");
+  const perSec = g.num(g.fn.getTotalPerSec());
+  assert.equal(g.num(result.gained), perSec * g.CONFIG.offlineCapSeconds, "rate x the capped window");
 });
 
 test("a gap shorter than minOfflineSeconds is not reported", () => {
@@ -329,8 +332,8 @@ test("a gap shorter than minOfflineSeconds is not reported", () => {
 test("offline progress reveals anything the new total affords", () => {
   const g = loadGame();
   g.reset(0);
-  g.state.generators.ecoli.owned = 100; // 100/s
-  g.state.lastSaved = Date.now() - 60 * 1000; // ~6000 virions
+  g.state.generators.ecoli.owned = 100;
+  g.state.lastSaved = Date.now() - 60 * 1000; // enough to pass V. cholerae's threshold
   g.fn.applyOfflineProgress();
-  assert.equal(g.state.generators.cholerae.unlocked, true, "cholerae appears at 1000");
+  assert.equal(g.state.generators.cholerae.unlocked, true, "cholerae revealed");
 });

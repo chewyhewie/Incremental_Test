@@ -34,8 +34,23 @@ petri dish, trying to multiply as much as possible.
 - `docs/roadmap.md`: future ideas for use and to be maintained by Claude
 - `docs/todo.md`: notes for use and to be maintained by user. This file should NOT be edited by Claude, but it should be merged in all commits.
 - `tools/`: developer tooling, never shipped. `tools/tests/` is the `npm test`
-  suite (`node:test`, no dependencies); see `tools/README.md`
-- `package.json`: dev-only, holds the `test` script. The game does not use it.
+  suite (`node:test`, no dependencies); see `tools/README.md`. `tools/sim/` is
+  the balance simulator (see below)
+- `package.json`: dev-only, holds the `test`, `sim` and `tune` scripts. The game does not use it.
+
+## Balance simulator
+- `npm run sim` plays 4h of game time for every strategy × playstyle and prints
+  milestone and wall tables; CSV goes to `tools/sim/results/` (gitignored).
+- `npm run tune` scores the early-game pacing targets (`TARGETS` in
+  `tools/sim/tune.js`) PASS/FAIL. Run it after any balance change.
+- Both are report-only: never change balance numbers because of a run unless
+  the user asks. Details and flags: `tools/README.md`.
+- **Game logic stays pure.** Costs, production, upgrade effects and `update(dt)`
+  live in `config.js` / `state.js` / `loop.js`, which must never touch the DOM,
+  `localStorage`, or timers at load time or in those functions. The sim loads
+  exactly those three files with no browser globals, so it runs the real
+  formulas; putting logic in `ui.js`/`save.js` would make it silently wrong.
+  `tools/tests/pure-logic.test.js` enforces the loading part.
 
 ## Rules
 1. **One state object.** All persistent game state lives in `state`
@@ -48,12 +63,12 @@ petri dish, trying to multiply as much as possible.
    passes seconds to `update(dt)`. Never assume a fixed tick length.
 4. **No magic numbers** outside `config.js`. New generators and upgrades are
    added as config entries; the UI builds from config.
-5. **Costs** grow ×1.15 per purchase and are rounded up (`ceil`).
+5. **Costs** grow ×1.3 per purchase and are rounded up (`ceil`).
    Upgrade effects are data: `effect.kind` = `"output"` | `"cost"` | `"costGrowth"`
    | `"milestone"`. Targeting is independent of kind — `targetId` hits one
    generator, `targetClass` a whole class, and neither means global.
-6. **Unlocks:** a generator becomes visible once virions reach 50% of its
-   current cost (after cost Mutations), an upgrade at 25% of its cost; the
+6. **Unlocks:** a generator becomes visible once virions reach 10% of its
+   current cost (after cost Mutations), an upgrade at 10% of its cost; the
    `unlocked` flag is saved so it stays visible.
    **Owned implies unlocked:** `buyUpgrade` refuses a hidden Mutation, and
    loading forces `unlocked` when `owned`. Anything that grants a Mutation
@@ -66,3 +81,9 @@ petri dish, trying to multiply as much as possible.
 9. **Offline progress** = production × time since `lastSaved`, capped at 8h,
    reported in the "While you were away..." notice.
 10. There is no click-to-earn action by design.
+11. **Mutation descriptions state their effect sizes** ("2.5x virions"), so
+    change the text whenever the number changes. A config-integrity test checks it.
+12. **Tests read balance numbers from `CONFIG`**, never hard-coded costs, rates or
+    multipliers, so retuning doesn't break the suite.
+13. **Encoding:** source files are UTF-8. `config.js` was once double-encoded
+    (`×` showed as `Ã—`), so check non-ASCII text after any scripted edit.

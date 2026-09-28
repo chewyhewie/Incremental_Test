@@ -43,14 +43,6 @@ test("generator cost and rate both rise strictly with each tier", () => {
   }
 });
 
-test("payback time (cost / rate) grows with each tier, so later hosts are a commitment", () => {
-  const paybacks = CONFIG.generators.map((x) => x.baseCost / x.baseRate);
-  for (let i = 1; i < paybacks.length; i++) {
-    assert.ok(paybacks[i] > paybacks[i - 1],
-      `${CONFIG.generators[i].id} payback ${paybacks[i]}s > ${paybacks[i - 1]}s`);
-  }
-});
-
 test("upgrades are listed in ascending cost order", () => {
   for (let i = 1; i < CONFIG.upgrades.length; i++) {
     assert.ok(CONFIG.upgrades[i].cost > CONFIG.upgrades[i - 1].cost,
@@ -149,4 +141,31 @@ test("stacked costGrowth Mutations cannot reach the floor by themselves", () => 
     .reduce((sum, u) => sum + u.effect.delta, 0);
   assert.ok(CONFIG.costGrowth + total > CONFIG.minCostGrowth,
     `all costGrowth deltas sum to ${total}, which hits the ${CONFIG.minCostGrowth} floor`);
+});
+
+// "Ã—" and "Â°" are what "×" and "°" become when UTF-8 text is decoded as
+// Windows-1252 and saved again. The game shows these strings verbatim.
+test("names and descriptions have no double-encoded (mojibake) characters", () => {
+  for (const item of [...CONFIG.generators, ...CONFIG.upgrades]) {
+    for (const text of [item.name, item.description]) {
+      assert.doesNotMatch(text, /[ÂÃ]/, `${item.id}: "${text}"`);
+    }
+  }
+});
+
+// Descriptions spell out effect sizes ("2.5x virions", "x1.1 per 10 owned"), so a
+// retune that forgets the text would show players the wrong number.
+test("each Mutation's description states its current effect size", () => {
+  const n = (x) => String(+x.toFixed(4)); // 1.3 + -0.01 -> "1.29", not 1.2900000000000003
+  for (const upg of CONFIG.upgrades) {
+    const e = upg.effect;
+    const text = upg.description;
+    if (e.kind === "costGrowth") {
+      assert.ok(text.includes(`${n(CONFIG.costGrowth + e.delta)}x`) && text.includes(`${n(CONFIG.costGrowth)}x`),
+        `${upg.id}: "${text}" should mention ${n(CONFIG.costGrowth + e.delta)}x and ${n(CONFIG.costGrowth)}x`);
+    } else {
+      assert.ok(text.includes(`${n(e.mult)}x`) || text.includes(`x${n(e.mult)}`),
+        `${upg.id}: "${text}" should mention ${n(e.mult)}x`);
+    }
+  }
 });

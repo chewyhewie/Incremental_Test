@@ -48,3 +48,7 @@ Only meaningful once production compounds; with flat per-host rates it equals an
 - [ ] Sound effects (purchase, upgrade, achievement)
 - [ ] Optional ambient lab background loop
 - [ ] Mute / volume setting (saved)
+
+## Developer tools
+- [x] Cheapest-first sim strategy
+- [ ] Add more sim strategies (e.g. save up for the next Mutation, buy hosts in ×10 batches)

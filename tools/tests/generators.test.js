@@ -8,6 +8,10 @@ const g = loadGame();
 const { CONFIG } = g;
 const fn = g.fn;
 
+// Balance numbers are read from CONFIG so these tests survive retuning.
+const gen = (id) => CONFIG.generators.find((x) => x.id === id);
+const upg = (id) => CONFIG.upgrades.find((x) => x.id === id);
+
 // Expected cost with no upgrades: ceil(baseCost * growth^owned).
 const expectedCost = (base, owned, growth = CONFIG.costGrowth) =>
   Math.ceil(base * Math.pow(growth, owned));
@@ -23,7 +27,7 @@ test("cost grows by CONFIG.costGrowth per purchase", () => {
   g.reset();
   for (const owned of [1, 5, 20, 57]) {
     g.state.generators.ecoli.owned = owned;
-    assert.equal(g.num(fn.getGeneratorCost("ecoli")), expectedCost(10, owned),
+    assert.equal(g.num(fn.getGeneratorCost("ecoli")), expectedCost(gen("ecoli").baseCost, owned),
       `ecoli at ${owned} owned`);
   }
 });
@@ -31,8 +35,9 @@ test("cost grows by CONFIG.costGrowth per purchase", () => {
 test("costs are rounded up and always whole numbers", () => {
   g.reset();
   g.state.generators.salmonella.owned = 3;
-  // 150 * 1.15^3 = 228.26..., so ceil matters here.
-  assert.equal(g.num(fn.getGeneratorCost("salmonella")), 229);
+  const raw = gen("salmonella").baseCost * Math.pow(CONFIG.costGrowth, 3);
+  assert.ok(!Number.isInteger(raw), "pick an owned count where ceil matters");
+  assert.equal(g.num(fn.getGeneratorCost("salmonella")), Math.ceil(raw));
   for (const gen of CONFIG.generators) {
     for (const owned of [0, 1, 7, 13]) {
       g.state.generators[gen.id].owned = owned;
@@ -55,8 +60,8 @@ test("costs stay exact far past what a JS float could hold", () => {
   g.state.generators.meningitidis.owned = 5000;
   const cost = fn.getGeneratorCost("meningitidis");
   assert.ok(Number.isFinite(cost.mantissa), "mantissa is finite");
-  // 300000 * 1.15^5000 is astronomically large; just pin the magnitude.
-  const expectedExp = Math.log10(300000) + 5000 * Math.log10(1.15);
+  // baseCost * growth^5000 is astronomically large; just pin the magnitude.
+  const expectedExp = Math.log10(gen("meningitidis").baseCost) + 5000 * Math.log10(CONFIG.costGrowth);
   assert.ok(Math.abs(cost.exponent - Math.floor(expectedExp)) <= 1,
     `exponent ${cost.exponent} ~= ${Math.floor(expectedExp)}`);
 });
@@ -68,7 +73,7 @@ test('a "cost" Mutation multiplies the price (Host Shutdown halves Class I)', ()
   g.state.upgrades.hostShutdown.owned = true;
   const half = g.num(fn.getGeneratorCost("ecoli"));
   // ceil() is applied after the multiplier, so compare against the same formula.
-  assert.equal(half, Math.ceil(10 * Math.pow(1.15, 4) * 0.5));
+  assert.equal(half, Math.ceil(gen("ecoli").baseCost * Math.pow(CONFIG.costGrowth, 4) * upg("hostShutdown").effect.mult));
   assert.ok(half < full);
 });
 
@@ -78,8 +83,9 @@ test('a "costGrowth" Mutation changes the exponent base, not the multiplier', ()
   const plain = g.num(fn.getGeneratorCost("ecoli"));
   g.state.upgrades.streamlinedGenome.owned = true;
   const reduced = g.num(fn.getGeneratorCost("ecoli"));
-  assert.equal(plain, expectedCost(10, 20, 1.15));
-  assert.equal(reduced, expectedCost(10, 20, 1.13));
+  const base = gen("ecoli").baseCost;
+  assert.equal(plain, expectedCost(base, 20, CONFIG.costGrowth));
+  assert.equal(reduced, expectedCost(base, 20, CONFIG.costGrowth + upg("streamlinedGenome").effect.delta));
   assert.ok(reduced < plain);
 });
 
@@ -103,7 +109,7 @@ test("getCostGrowth reports the plain factor, and the Mutation's factor", () => 
   const ecoli = fn.getGeneratorConfig("ecoli");
   assert.equal(fn.getCostGrowth(ecoli), CONFIG.costGrowth);
   g.state.upgrades.streamlinedGenome.owned = true;
-  assert.equal(fn.getCostGrowth(ecoli), 1.13);
+  assert.equal(fn.getCostGrowth(ecoli), CONFIG.costGrowth + upg("streamlinedGenome").effect.delta);
 });
 
 test("getCostGrowth clamps at CONFIG.minCostGrowth", () => {
@@ -124,9 +130,11 @@ test("output is rate x owned, and the total is the sum over all generators", () 
   g.reset();
   g.state.generators.ecoli.owned = 7;
   g.state.generators.salmonella.owned = 3;
-  assert.equal(g.num(fn.getGeneratorOutput("ecoli")), 7);       // 1/s each
-  assert.equal(g.num(fn.getGeneratorOutput("salmonella")), 30); // 10/s each
-  assert.equal(g.num(fn.getTotalPerSec()), 37);
+  const ecoli = 7 * gen("ecoli").baseRate;
+  const salmonella = 3 * gen("salmonella").baseRate;
+  assert.equal(g.num(fn.getGeneratorOutput("ecoli")), ecoli);
+  assert.equal(g.num(fn.getGeneratorOutput("salmonella")), salmonella);
+  assert.equal(g.num(fn.getTotalPerSec()), ecoli + salmonella);
 });
 
 test("an owned-zero generator contributes nothing", () => {
@@ -139,41 +147,50 @@ test("an owned-zero generator contributes nothing", () => {
 // Unlocks: the threshold must follow the CURRENT cost, not the base cost.
 // ---------------------------------------------------------------------------
 
-test("a generator is revealed at exactly 50% of its current cost", () => {
+// Thresholds like 150 * 0.1 are not exact in floating point, so these probe just
+// below and just above the threshold rather than at it.
+const BELOW = 0.999;
+const ABOVE = 1.001;
+
+test("a generator is revealed at unlockFraction of its current cost", () => {
   for (const gen of CONFIG.generators) {
     const threshold = gen.baseCost * CONFIG.unlockFraction;
-    g.reset(threshold - 1);
+    g.reset(threshold * BELOW);
     fn.checkUnlocks();
     assert.equal(g.state.generators[gen.id].unlocked, false,
-      `${gen.id} hidden at ${threshold - 1}`);
-    g.reset(threshold);
+      `${gen.id} hidden just below ${threshold}`);
+    g.reset(threshold * ABOVE);
     fn.checkUnlocks();
     assert.equal(g.state.generators[gen.id].unlocked, true,
-      `${gen.id} revealed at ${threshold}`);
+      `${gen.id} revealed just above ${threshold}`);
   }
 });
 
 test("a cost Mutation lowers the reveal threshold too (regression)", () => {
-  // V. cholerae costs 2000, so it normally appears at 1000. With Host Shutdown
-  // halving Class I costs it must appear at 500 instead.
-  g.reset(500);
-  fn.checkUnlocks();
-  assert.equal(g.state.generators.cholerae.unlocked, false, "not yet at 500 without the Mutation");
+  // Host Shutdown halves Class I costs, so V. cholerae must appear at half its
+  // usual threshold. Probe halfway between the two.
+  const hostShutdown = CONFIG.upgrades.find((u) => u.id === "hostShutdown").effect.mult;
+  const cholerae = CONFIG.generators.find((x) => x.id === "cholerae").baseCost;
+  const between = cholerae * CONFIG.unlockFraction * (1 + hostShutdown) / 2;
 
-  g.reset(500);
+  g.reset(between);
+  fn.checkUnlocks();
+  assert.equal(g.state.generators.cholerae.unlocked, false, `not yet at ${between} without the Mutation`);
+
+  g.reset(between);
   g.state.upgrades.hostShutdown.owned = true;
   fn.checkUnlocks();
-  assert.equal(g.state.generators.cholerae.unlocked, true, "revealed at 500 with the Mutation");
+  assert.equal(g.state.generators.cholerae.unlocked, true, `revealed at ${between} with the Mutation`);
 });
 
 test("the reveal threshold tracks the discounted cost for every host", () => {
   for (const gen of CONFIG.generators) {
-    const discounted = Math.ceil(gen.baseCost * 0.5) * CONFIG.unlockFraction;
-    g.reset(Math.ceil(discounted));
+    const discounted = Math.ceil(gen.baseCost * 0.5) * CONFIG.unlockFraction * ABOVE;
+    g.reset(discounted);
     g.state.upgrades.hostShutdown.owned = true;
     fn.checkUnlocks();
     assert.equal(g.state.generators[gen.id].unlocked, true,
-      `${gen.id} revealed at ${Math.ceil(discounted)} with Host Shutdown`);
+      `${gen.id} revealed at ${discounted} with Host Shutdown`);
   }
 });
 
@@ -217,7 +234,7 @@ test("each purchase makes the next one dearer", () => {
   fn.buyGenerator("ecoli");
   const second = g.num(fn.getGeneratorCost("ecoli"));
   assert.ok(second > first, `${second} > ${first}`);
-  assert.equal(second, Math.ceil(10 * 1.15));
+  assert.equal(second, Math.ceil(gen("ecoli").baseCost * CONFIG.costGrowth));
 });
 
 test("buying is affordable exactly at the cost, not a virion below", () => {
