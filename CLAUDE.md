@@ -43,6 +43,9 @@ petri dish, trying to multiply as much as possible.
   milestone and wall tables; CSV goes to `tools/sim/results/` (gitignored).
 - `npm run tune` scores the early-game pacing targets (`TARGETS` in
   `tools/sim/tune.js`) PASS/FAIL. Run it after any balance change.
+- `--search` limits (fixed hosts, grouped Mutation multipliers, `costGrowth`
+  range, minimum rate step) live in `SEARCH` in `tools/sim/tune.js`; change them
+  there rather than editing the search code.
 - Both are report-only: never change balance numbers because of a run unless
   the user asks. Details and flags: `tools/README.md`.
 - **Game logic stays pure.** Costs, production, upgrade effects and `update(dt)`
@@ -63,10 +66,14 @@ petri dish, trying to multiply as much as possible.
    passes seconds to `update(dt)`. Never assume a fixed tick length.
 4. **No magic numbers** outside `config.js`. New generators and upgrades are
    added as config entries; the UI builds from config.
-5. **Costs** grow ×1.3 per purchase and are rounded up (`ceil`).
+5. **Costs** grow ×1.55 per purchase and are rounded up (`ceil`).
    Upgrade effects are data: `effect.kind` = `"output"` | `"cost"` | `"costGrowth"`
    | `"milestone"`. Targeting is independent of kind — `targetId` hits one
    generator, `targetClass` a whole class, and neither means global.
+   Host tiers rise strictly in `baseCost` and `baseRate`. Mutations are listed
+   in strictly ascending cost order, and a per-host Mutation (`targetId`) costs
+   at least its host's `baseCost`. Config-integrity tests and the tuner's search
+   both enforce these.
 6. **Unlocks:** a generator becomes visible once virions reach 10% of its
    current cost (after cost Mutations), an upgrade at 10% of its cost; the
    `unlocked` flag is saved so it stays visible.
@@ -78,12 +85,17 @@ petri dish, trying to multiply as much as possible.
 8. **Saving:** localStorage, base64 JSON, Decimals stored as strings. Save
    has `version` and `lastSaved`. Autosave every 30s. When changing the save
    shape, bump `CONFIG.saveVersion` and add a step in `migrateSave()`.
+   Removing a host or Mutation needs no migration (unknown IDs are dropped on
+   load), but players who owned it lose it with no refund.
 9. **Offline progress** = production × time since `lastSaved`, capped at 8h,
    reported in the "While you were away..." notice.
 10. There is no click-to-earn action by design.
 11. **Mutation descriptions state their effect sizes** ("2.5x virions"), so
     change the text whenever the number changes. A config-integrity test checks it.
 12. **Tests read balance numbers from `CONFIG`**, never hard-coded costs, rates or
-    multipliers, so retuning doesn't break the suite.
+    multipliers, so retuning doesn't break the suite. Don't name a particular
+    Mutation as the cheapest or first one (use `CONFIG.upgrades[0]`). Compare
+    rate-derived values with a tolerance, because rates like 0.39 aren't exact
+    in binary.
 13. **Encoding:** source files are UTF-8. `config.js` was once double-encoded
     (`×` showed as `Ã—`), so check non-ASCII text after any scripted edit.

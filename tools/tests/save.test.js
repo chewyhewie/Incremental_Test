@@ -31,14 +31,15 @@ test("a save round trips through encode/decode unchanged", () => {
   g.state.generators.ecoli.owned = 12;
   g.state.generators.listeria.owned = 3;
   g.fn.checkUnlocks();
-  g.fn.buyUpgrade("rapidTranscription");
+  const cheapest = g.CONFIG.upgrades[0].id; // listed in ascending cost order
+  assert.equal(g.fn.buyUpgrade(cheapest), true, "setup: bought the cheapest Mutation");
 
   const restored = g.fn.decodeSave(g.fn.encodeSave(g.state));
   assert.equal(restored.virions.toString(), g.state.virions.toString());
   assert.equal(restored.generators.ecoli.owned, 12);
   assert.equal(restored.generators.listeria.owned, 3);
-  assert.equal(restored.upgrades.rapidTranscription.owned, true);
-  assert.equal(restored.upgrades.rapidTranscription.unlocked, true);
+  assert.equal(restored.upgrades[cheapest].owned, true);
+  assert.equal(restored.upgrades[cheapest].unlocked, true);
   assert.equal(restored.upgrades.serialPassage.owned, false);
 });
 
@@ -105,9 +106,20 @@ test("hosts and Mutations added after a v1 save default to empty", () => {
   for (const id of ["listeria", "meningitidis"]) {
     assert.deepEqual(g.plain(s.generators[id]), { owned: 0, unlocked: false }, id);
   }
-  for (const id of ["plasmidLibrary", "nutrientBroth", "serialPassage"]) {
+  for (const id of ["plasmidLibrary", "lacOperonJam", "serialPassage"]) {
     assert.deepEqual(g.plain(s.upgrades[id]), { owned: false, unlocked: false }, id);
   }
+});
+
+test("a save holding a since-removed Mutation loads and drops it", () => {
+  // Nutrient Broth and Streamlined Genome were removed from CONFIG.
+  const g = loadGame();
+  const data = g.plain(g.reset(500));
+  data.virions = "500";
+  data.upgrades.nutrientBroth = { owned: true, unlocked: true };
+  const s = g.fn.decodeSave(g.fn.btoa(JSON.stringify(data)));
+  assert.equal(s.upgrades.nutrientBroth, undefined, "not carried into state");
+  assert.equal(s.virions.toString(), "500");
 });
 
 test("a Mutation acquired under v1 still takes effect after migrating", () => {

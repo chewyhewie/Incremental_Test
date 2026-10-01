@@ -26,6 +26,7 @@ Only meaningful once production compounds; with flat per-host rates it equals an
 - [ ] Tiered upgrades per generator
 - [ ] Synergy upgrades (one host type boosts another)
 - [ ] Upgrades that improve offline progress or its cap
+- [ ] Reuse the removed Streamlined Genome's effect (lowering cost scaling, e.g. Class I costs grow 1.29x instead of 1.3x). The `"costGrowth"` effect kind and the `minCostGrowth` floor are still supported, but no Mutation uses them right now
 
 ## Achievements
 - [ ] Achievement list with unlock conditions (first host, 1e6 virions, own 100 E. coli…)
@@ -48,6 +49,10 @@ Only meaningful once production compounds; with flat per-host rates it equals an
 - [ ] Sound effects (purchase, upgrade, achievement)
 - [ ] Optional ambient lab background loop
 - [ ] Mute / volume setting (saved)
+
+## Balance
+- [ ] Improve the current balance (applied from a 6-minute search, "q4"). It passes every tuner target, but longer searches could likely lower `costGrowth` (now 1.55) and smooth the pacing: the longest stretch without a first buy is 4m 22s against a 5 min limit, and Host Shutdown sits at the extreme 0.1x
+- [ ] Give `--search` a tie-breaker once all targets pass (e.g. prefer T near 35 min, even first-buy spacing, lower `costGrowth`, wider rate steps between host tiers); today a passing config scores 0 and the search has nothing left to aim for
 
 ## Developer tools
 - [x] Cheapest-first sim strategy

@@ -77,26 +77,39 @@ test('a "cost" Mutation multiplies the price (Host Shutdown halves Class I)', ()
   assert.ok(half < full);
 });
 
+// No shipped Mutation uses "costGrowth" right now, so these tests add a test-only
+// one to a scratch instance to keep the effect kind covered.
+const TEST_DELTA = -0.01;
+function withCostGrowthMutation() {
+  const iso = loadGame();
+  iso.CONFIG.upgrades.push({
+    id: "_streamlined", name: "", description: "", cost: 1,
+    effect: { kind: "costGrowth", targetClass: 1, delta: TEST_DELTA },
+  });
+  iso.reset();
+  return iso;
+}
+
 test('a "costGrowth" Mutation changes the exponent base, not the multiplier', () => {
-  g.reset();
-  g.state.generators.ecoli.owned = 20;
-  const plain = g.num(fn.getGeneratorCost("ecoli"));
-  g.state.upgrades.streamlinedGenome.owned = true;
-  const reduced = g.num(fn.getGeneratorCost("ecoli"));
+  const iso = withCostGrowthMutation();
+  iso.state.generators.ecoli.owned = 20;
+  const plain = iso.num(iso.fn.getGeneratorCost("ecoli"));
+  iso.state.upgrades._streamlined.owned = true;
+  const reduced = iso.num(iso.fn.getGeneratorCost("ecoli"));
   const base = gen("ecoli").baseCost;
   assert.equal(plain, expectedCost(base, 20, CONFIG.costGrowth));
-  assert.equal(reduced, expectedCost(base, 20, CONFIG.costGrowth + upg("streamlinedGenome").effect.delta));
+  assert.equal(reduced, expectedCost(base, 20, CONFIG.costGrowth + TEST_DELTA));
   assert.ok(reduced < plain);
 });
 
 test("costGrowth compounds: the discount widens as you buy more", () => {
-  g.reset();
+  const iso = withCostGrowthMutation();
   const discountAt = (owned) => {
-    g.state.upgrades.streamlinedGenome.owned = false;
-    g.state.generators.ecoli.owned = owned;
-    const plain = g.num(fn.getGeneratorCost("ecoli"));
-    g.state.upgrades.streamlinedGenome.owned = true;
-    const cheap = g.num(fn.getGeneratorCost("ecoli"));
+    iso.state.upgrades._streamlined.owned = false;
+    iso.state.generators.ecoli.owned = owned;
+    const plain = iso.num(iso.fn.getGeneratorCost("ecoli"));
+    iso.state.upgrades._streamlined.owned = true;
+    const cheap = iso.num(iso.fn.getGeneratorCost("ecoli"));
     return 1 - cheap / plain;
   };
   const d20 = discountAt(20);
@@ -105,11 +118,11 @@ test("costGrowth compounds: the discount widens as you buy more", () => {
 });
 
 test("getCostGrowth reports the plain factor, and the Mutation's factor", () => {
-  g.reset();
-  const ecoli = fn.getGeneratorConfig("ecoli");
-  assert.equal(fn.getCostGrowth(ecoli), CONFIG.costGrowth);
-  g.state.upgrades.streamlinedGenome.owned = true;
-  assert.equal(fn.getCostGrowth(ecoli), CONFIG.costGrowth + upg("streamlinedGenome").effect.delta);
+  const iso = withCostGrowthMutation();
+  const ecoli = iso.fn.getGeneratorConfig("ecoli");
+  assert.equal(iso.fn.getCostGrowth(ecoli), CONFIG.costGrowth);
+  iso.state.upgrades._streamlined.owned = true;
+  assert.equal(iso.fn.getCostGrowth(ecoli), CONFIG.costGrowth + TEST_DELTA);
 });
 
 test("getCostGrowth clamps at CONFIG.minCostGrowth", () => {
@@ -215,17 +228,18 @@ test("reveal does not depend on how many you own", () => {
 // ---------------------------------------------------------------------------
 
 test("buyGenerator deducts the cost and increments owned", () => {
-  g.reset(10);
+  g.reset(gen("ecoli").baseCost);
   assert.equal(fn.buyGenerator("ecoli"), true);
   assert.equal(g.state.generators.ecoli.owned, 1);
   assert.equal(g.num(g.state.virions), 0);
 });
 
 test("buyGenerator refuses when the player cannot afford it", () => {
-  g.reset(9);
+  const short = gen("ecoli").baseCost - 1;
+  g.reset(short);
   assert.equal(fn.buyGenerator("ecoli"), false);
   assert.equal(g.state.generators.ecoli.owned, 0);
-  assert.equal(g.num(g.state.virions), 9, "virions untouched");
+  assert.equal(g.num(g.state.virions), short, "virions untouched");
 });
 
 test("each purchase makes the next one dearer", () => {

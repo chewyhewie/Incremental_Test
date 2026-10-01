@@ -83,10 +83,12 @@ npm run tune -- --patch cand.json        # score config.js with a patch applied
 npm run tune -- --search --minutes 5     # hill-climb and print the best patch
 ```
 
-`sim/tune.js` runs Active greedyPayback for 30 minutes of game time and grades the
-early-game pacing against `TARGETS`: T (all Mutations + 10 of each host) in 15–20 min,
-no purchase-free gap over 3 min before T, at most 30% of purchases within 5s of the
-previous one, and no first-buy interval over 2x the even spacing. It prints PASS/FAIL,
+`sim/tune.js` runs Active greedyPayback for 60 minutes of game time and grades the
+early-game pacing against `TARGETS`, looking only at first-time purchases (repeat
+host purchases are filler between them): T (all Mutations + 10 of each host) in
+30–40 min, no stretch over 5 min without a first-time purchase before T (the stretch
+from the last one to T counts), and at most 30% of first buys within 5s of the
+previous one (first buys made at the same moment count as one). It prints PASS/FAIL,
 a score (lower is better) and the first-buy timeline.
 
 A patch is JSON keyed by id, and every field is optional:
@@ -95,10 +97,19 @@ A patch is JSON keyed by id, and every field is optional:
 { "costGrowth": 1.3,
   "generators": { "listeria": { "baseCost": 45000, "baseRate": 600 } },
   "upgrades": { "hostShutdown": { "cost": 6000, "mult": 0.5 },
-                "streamlinedGenome": { "delta": -0.01 } } }
+                "lacOperonJam": { "cost": 312500 } } }
 ```
 
+A `"costGrowth"` Mutation takes `delta` instead of `mult`.
+
 It is applied in memory through `loadLogic({ patch })`, so `config.js` is never
-touched. The search nudges 1–3 random levers at a time and keeps any improvement. Its
+touched. The search nudges 1–3 random levers at a time and keeps any improvement,
+within the limits in `SEARCH` (top of `sim/tune.js`): one shared `costGrowth` in a
+set range; grouped Mutation multipliers that move together between a few allowed
+values; Mutations in `fixedEffects` whose effect never changes; hosts in
+`fixedGenerators` whose base cost and rate never change; each host's rate at least
+`minRateStep` times the previous host's; and the config rules
+in `followsRules()` (tiers rise in cost and rate, Mutation costs rise in list order,
+a per-host Mutation costs at least its host's base cost). Its
 numbers are unrounded, so round them, re-score with `--patch`, then copy them into
 `config.js` by hand (and update the Mutation descriptions).

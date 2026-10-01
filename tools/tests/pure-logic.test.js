@@ -38,5 +38,6 @@ test("every strategy in STRATEGY_ORDER exists", () => {
 test("cheapestFirst buys the cheapest visible item first", () => {
   const r = runProfile({ name: "Test", strategy: "cheapestFirst", checkEvery: 1 }, SHORT_RUN);
   assert.equal(r.firsts[0].id, "ecoli");
-  assert.equal(r.firsts[0].cost.toNumber(), 10);
+  const { CONFIG } = loadLogic();
+  assert.equal(r.firsts[0].cost.toNumber(), CONFIG.generators.find((x) => x.id === "ecoli").baseCost);
 });

@@ -110,16 +110,50 @@ test("every effect.targetClass names a class some generator belongs to", () => {
   }
 });
 
-test("each generator has exactly one per-host output Mutation", () => {
+// Per-host Mutations come in sets, one per generator, so no host is left out.
+test("every generator has the same number (at least 1) of per-host output Mutations", () => {
   const counts = new Map(genIds.map((id) => [id, 0]));
   for (const { effect } of CONFIG.upgrades) {
     if (effect.kind === "output" && effect.targetId !== undefined) {
       counts.set(effect.targetId, counts.get(effect.targetId) + 1);
     }
   }
+  const want = counts.get(genIds[0]);
+  assert.ok(want >= 1, `${genIds[0]} has no per-host output Mutation`);
   for (const [id, n] of counts) {
-    assert.equal(n, 1, `${id} has ${n} per-host output Mutations, want exactly 1`);
+    assert.equal(n, want, `${id} has ${n} per-host output Mutations, want ${want} like ${genIds[0]}`);
   }
+});
+
+// A host-specific Mutation must not be buyable long before its host: a boost for a
+// host the player cannot have yet is a wasted purchase.
+test("every per-host Mutation costs at least its host's base cost", () => {
+  for (const { id, cost, effect } of CONFIG.upgrades) {
+    if (effect.targetId === undefined) continue;
+    const host = CONFIG.generators.find((x) => x.id === effect.targetId);
+    assert.ok(cost >= host.baseCost,
+      `${id} costs ${cost}, below ${host.id}'s base cost of ${host.baseCost}`);
+  }
+});
+
+// The tuner's --search rules name Mutations by id; a rename or removal here would
+// otherwise only surface as a crash mid-search.
+test("tuner SEARCH rules name real Mutations", () => {
+  const { SEARCH } = require("../sim/tune.js");
+  const ids = new Set(CONFIG.upgrades.map((u) => u.id));
+  for (const { ids: group, choices } of SEARCH.multGroups) {
+    for (const id of group) assert.ok(ids.has(id), `SEARCH group names unknown Mutation "${id}"`);
+    assert.ok(choices.length > 0, `group ${group.join(",")} has choices`);
+  }
+  for (const id of SEARCH.fixedEffects) assert.ok(ids.has(id), `SEARCH.fixedEffects names unknown Mutation "${id}"`);
+  for (const id of Object.keys(SEARCH.fixedGenerators)) {
+    assert.ok(genIds.includes(id), `SEARCH.fixedGenerators names unknown host "${id}"`);
+  }
+});
+
+test("the current config follows the tuner's search rules", () => {
+  const { followsRules, patchFromConfig } = require("../sim/tune.js");
+  assert.ok(followsRules(patchFromConfig(CONFIG), CONFIG));
 });
 
 test("tunables are sane", () => {

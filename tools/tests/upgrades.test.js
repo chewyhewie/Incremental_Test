@@ -15,6 +15,12 @@ const base = (id) => CONFIG.generators.find((x) => x.id === id).baseRate;
 const upgCfg = (id) => CONFIG.upgrades.find((x) => x.id === id);
 const mult = (id) => upgCfg(id).effect.mult;
 
+// Mutations are listed in ascending cost order (config-integrity checks it).
+const cheapest = CONFIG.upgrades[0];
+const latest = CONFIG.upgrades[CONFIG.upgrades.length - 1];
+// Enough virions to reveal and buy every Mutation.
+const affordAll = CONFIG.upgrades.reduce((sum, u) => sum + u.cost, 0);
+
 // Multipliers pass through Decimal, so compare with a relative tolerance.
 function near(actual, expected, msg) {
   assert.ok(Math.abs(actual - expected) <= 1e-9 * Math.abs(expected), `${msg ?? ""} ${actual} ~= ${expected}`);
@@ -46,25 +52,38 @@ test("targetClass applies to every generator of that class", () => {
   }
 });
 
+// No shipped Mutation is global right now, so these tests add a test-only one
+// to a scratch instance to keep untargeted effects covered.
+const TEST_GLOBAL_MULT = 1.5;
+function withGlobalMutation() {
+  const iso = loadGame();
+  iso.CONFIG.upgrades.push({
+    id: "_global", name: "", description: "", cost: 1,
+    effect: { kind: "output", mult: TEST_GLOBAL_MULT },
+  });
+  return iso;
+}
+
 test("an effect with neither target is global", () => {
-  g.reset();
-  g.state.upgrades.nutrientBroth.owned = true; // output, no target
+  const iso = withGlobalMutation();
+  iso.reset();
+  iso.state.upgrades._global.owned = true; // output, no target
   for (const gen of CONFIG.generators) {
-    near(rate(gen.id), gen.baseRate * mult("nutrientBroth"), gen.id);
+    near(iso.num(iso.fn.getGeneratorRate(gen.id)), gen.baseRate * TEST_GLOBAL_MULT, gen.id);
   }
 });
 
 test("a global effect would also reach a generator of a brand-new class", () => {
-  // Guards the intent: Nutrient Broth should keep working when Class II arrives.
-  const iso = loadGame();
+  // Guards the intent: a global Mutation should keep working when Class II arrives.
+  const iso = withGlobalMutation();
   iso.CONFIG.generators.push({
     id: "amoeba", name: "Amoeba", description: "", genClass: 2,
     baseCost: 1e9, baseRate: 1e5,
   });
   iso.reset();
   assert.equal(iso.num(iso.fn.getGeneratorRate("amoeba")), 1e5);
-  iso.state.upgrades.nutrientBroth.owned = true;
-  const boosted = 1e5 * mult("nutrientBroth");
+  iso.state.upgrades._global.owned = true;
+  const boosted = 1e5 * TEST_GLOBAL_MULT;
   near(iso.num(iso.fn.getGeneratorRate("amoeba")), boosted, "global reaches class 2");
   iso.state.upgrades.rapidTranscription.owned = true; // targetClass 1
   near(iso.num(iso.fn.getGeneratorRate("amoeba")), boosted, "class 1 effect does not");
@@ -75,9 +94,9 @@ test("multipliers from different Mutations stack multiplicatively", () => {
   g.state.upgrades.rapidTranscription.owned = true; // class 1
   g.state.upgrades.rapidTranslation.owned = true;   // class 1
   g.state.upgrades.plasmidLibrary.owned = true;     // ecoli only
-  g.state.upgrades.nutrientBroth.owned = true;      // global
-  const shared = mult("rapidTranscription") * mult("rapidTranslation") * mult("nutrientBroth");
-  near(rate("ecoli"), base("ecoli") * shared * mult("plasmidLibrary"));
+  g.state.upgrades.lacOperonJam.owned = true;       // ecoli only
+  const shared = mult("rapidTranscription") * mult("rapidTranslation");
+  near(rate("ecoli"), base("ecoli") * shared * mult("plasmidLibrary") * mult("lacOperonJam"));
   near(rate("salmonella"), base("salmonella") * shared, "no ecoli-only bonus");
 });
 
@@ -144,11 +163,11 @@ const ABOVE = 1.001;
 // Pins which Mutations a brand-new game shows. If this changes, it is a balance
 // decision (startingVirions, costs or upgradeUnlockFraction moved), so update it on
 // purpose.
-test("only Rapid Transcription is revealed at the starting virion count", () => {
+test("no Mutation is revealed at the starting virion count", () => {
   g.reset(CONFIG.startingVirions);
   fn.checkUnlocks();
   const visible = CONFIG.upgrades.filter((u) => g.state.upgrades[u.id].unlocked);
-  assert.deepEqual(g.plain(visible.map((u) => u.id)), ["rapidTranscription"]);
+  assert.deepEqual(g.plain(visible.map((u) => u.id)), []);
 });
 
 test("every Mutation is revealed at upgradeUnlockFraction of its cost", () => {
@@ -166,7 +185,7 @@ test("every Mutation is revealed at upgradeUnlockFraction of its cost", () => {
 });
 
 test("reveal does not grant the Mutation", () => {
-  g.reset(1e9);
+  g.reset(latest.cost);
   fn.checkUnlocks();
   for (const upg of CONFIG.upgrades) {
     assert.equal(g.state.upgrades[upg.id].unlocked, true, `${upg.id} revealed`);
@@ -184,13 +203,13 @@ test("a revealed Mutation stays revealed after spending back down", () => {
 });
 
 test("Mutation reveal ignores cost Mutations (upgrade prices are fixed)", () => {
-  // Nutrient Broth is not revealed at a new game's starting virions, so its
-  // reveal is testable.
-  const threshold = CONFIG.upgrades.find((u) => u.id === "nutrientBroth").cost * CONFIG.upgradeUnlockFraction;
+  // The most expensive Mutation is not revealed at a new game's starting
+  // virions, so its reveal is testable.
+  const threshold = latest.cost * CONFIG.upgradeUnlockFraction;
   g.reset(threshold * BELOW);
   g.state.upgrades.hostShutdown.owned = true; // discounts hosts, not Mutations
   fn.checkUnlocks();
-  assert.equal(g.state.upgrades.nutrientBroth.unlocked, false,
+  assert.equal(g.state.upgrades[latest.id].unlocked, false,
     `still hidden just below ${threshold}: Host Shutdown does not discount Mutations`);
 });
 
@@ -207,11 +226,11 @@ test("buyUpgrade deducts the cost and marks it owned", () => {
 });
 
 test("buyUpgrade refuses a second purchase", () => {
-  g.reset(1000);
+  g.reset(cheapest.cost * 2);
   fn.checkUnlocks();
-  assert.equal(fn.buyUpgrade("rapidTranscription"), true);
+  assert.equal(fn.buyUpgrade(cheapest.id), true);
   const left = g.num(g.state.virions);
-  assert.equal(fn.buyUpgrade("rapidTranscription"), false);
+  assert.equal(fn.buyUpgrade(cheapest.id), false);
   assert.equal(g.num(g.state.virions), left, "no double charge");
 });
 
@@ -233,7 +252,7 @@ test("buyUpgrade refuses a Mutation that has not been revealed", () => {
 });
 
 test("owned implies unlocked for every Mutation bought normally", () => {
-  g.reset(1e9);
+  g.reset(affordAll);
   fn.checkUnlocks();
   for (const upg of CONFIG.upgrades) {
     assert.equal(fn.buyUpgrade(upg.id), true, `bought ${upg.id}`);
@@ -245,7 +264,7 @@ test("owned implies unlocked for every Mutation bought normally", () => {
 });
 
 test("buying every Mutation leaves production finite and correct", () => {
-  g.reset(1e9);
+  g.reset(affordAll);
   fn.checkUnlocks();
   for (const upg of CONFIG.upgrades) fn.buyUpgrade(upg.id);
   const { per } = upgCfg("serialPassage").effect;

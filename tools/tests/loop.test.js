@@ -10,14 +10,19 @@ const fn = g.fn;
 // Balance numbers are read from CONFIG so these tests survive retuning.
 const baseRate = (id) => g.CONFIG.generators.find((x) => x.id === id).baseRate;
 
+// Rates like 0.39 or 1.1 are not exact in binary, so compare with a relative tolerance.
+function near(actual, expected, msg) {
+  assert.ok(Math.abs(actual - expected) <= 1e-9 * Math.abs(expected), `${msg ?? ""} ${actual} ~= ${expected}`);
+}
+
 test("update(dt) adds production x dt", () => {
   g.reset(0);
   g.state.generators.ecoli.owned = 10;
   const perSec = 10 * baseRate("ecoli");
   fn.update(2);
-  assert.equal(g.num(g.state.virions), 2 * perSec);
+  near(g.num(g.state.virions), 2 * perSec);
   fn.update(0.5);
-  assert.equal(g.num(g.state.virions), 2.5 * perSec);
+  near(g.num(g.state.virions), 2.5 * perSec);
 });
 
 test("two half-steps equal one whole step", () => {
@@ -30,7 +35,7 @@ test("two half-steps equal one whole step", () => {
   g.state.generators.salmonella.owned = 3;
   fn.update(0.5);
   fn.update(0.5);
-  assert.equal(g.num(g.state.virions), whole, "delta time is linear");
+  near(g.num(g.state.virions), whole, "delta time is linear:");
 });
 
 test("update ignores non-positive and non-numeric dt", () => {
@@ -51,11 +56,13 @@ test("update reveals whatever the new total affords", () => {
 });
 
 test("update reveals Mutations too", () => {
+  const cheapest = g.CONFIG.upgrades[0]; // listed in ascending cost order
+  const threshold = cheapest.cost * g.CONFIG.upgradeUnlockFraction;
   g.reset(0);
-  g.state.generators.ecoli.owned = 30;
-  assert.equal(g.state.upgrades.rapidTranscription.unlocked, false);
-  fn.update(1); // enough virions to pass Rapid Transcription's reveal threshold
-  assert.equal(g.state.upgrades.rapidTranscription.unlocked, true);
+  g.state.generators.ecoli.owned = Math.ceil(threshold / baseRate("ecoli")) + 1;
+  assert.equal(g.state.upgrades[cheapest.id].unlocked, false);
+  fn.update(1); // enough virions to pass the cheapest Mutation's reveal threshold
+  assert.equal(g.state.upgrades[cheapest.id].unlocked, true);
 });
 
 test("production with nothing owned leaves the total alone", () => {
