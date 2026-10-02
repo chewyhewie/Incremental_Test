@@ -103,13 +103,23 @@ A patch is JSON keyed by id, and every field is optional:
 A `"costGrowth"` Mutation takes `delta` instead of `mult`.
 
 It is applied in memory through `loadLogic({ patch })`, so `config.js` is never
-touched. The search nudges 1–3 random levers at a time and keeps any improvement,
-within the limits in `SEARCH` (top of `sim/tune.js`): one shared `costGrowth` in a
-set range; grouped Mutation multipliers that move together between a few allowed
-values; Mutations in `fixedEffects` whose effect never changes; hosts in
-`fixedGenerators` whose base cost and rate never change; each host's rate at least
-`minRateStep` times the previous host's; and the config rules
-in `followsRules()` (tiers rise in cost and rate, Mutation costs rise in list order,
-a per-host Mutation costs at least its host's base cost). Its
-numbers are unrounded, so round them, re-score with `--patch`, then copy them into
-`config.js` by hand (and update the Mutation descriptions).
+touched. The search nudges 1–3 random levers at a time (each by up to `maxNudge`
+in log space) within the limits in `SEARCH` (top of `sim/tune.js`): one shared
+`costGrowth` in a set range; grouped Mutation multipliers that move together
+between a few allowed values; Mutations in `fixedEffects` whose effect never
+changes; other Mutations' effects within `freeEffects`; hosts in
+`fixedGenerators` whose base cost and rate never change; base costs of at least
+`minBaseCost`; each host's rate at least `minRateStep` times the previous host's;
+and the config rules in `followsRules()` (tiers rise in cost and rate, Mutation
+costs rise in list order, a per-host Mutation costs at least its host's base cost).
+
+It keeps a change unless it ranks worse: lower score first, then on a tie lower
+`costGrowth` (to `tiebreakCostGrowthStep`), then wider gaps between hosts (the
+smallest `baseRate` ratio between neighbouring tiers). Ties are kept too, so it
+keeps exploring once every target passes. The score only covers the game up to
+T, so it can't see what happens after; with `costGrowth` near 1.05 a config
+scored 0 but bought ~1,200 hosts in 4h (vs ~230 at 1.3). That is why the
+`costGrowth` range starts at 1.2. Check `npm run sim` before adopting a result.
+
+Its numbers are unrounded, so round them, re-score with `--patch`, then copy them
+into `config.js` by hand (and update the Mutation descriptions).

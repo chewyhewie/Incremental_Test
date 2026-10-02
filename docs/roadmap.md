@@ -1,8 +1,10 @@
 # Roadmap
 
-Ideas for after the prototype. Not in priority order.
+Ideas for after the prototype. Not in priority order, except that prestige is next.
 
-## Prestige: Recombination
+## Prestige: Recombination (next)
+Once every Mutation is owned (~30-45 min for greedyPayback) only hosts are left to
+buy, and the sim shows ever-longer walls from about 1h 15m. Prestige fills that gap.
 - [ ] Reset progress to earn **Recombination Points (RP)** based on total virions produced
 - [ ] RP give a permanent production multiplier
 - [ ] RP shop with permanent perks (starting virions, cheaper hosts, faster offline gains)
@@ -51,8 +53,9 @@ Only meaningful once production compounds; with flat per-host rates it equals an
 - [ ] Mute / volume setting (saved)
 
 ## Balance
-- [ ] Improve the current balance (applied from a 6-minute search, "q4"). It passes every tuner target, but longer searches could likely lower `costGrowth` (now 1.55) and smooth the pacing: the longest stretch without a first buy is 4m 22s against a 5 min limit, and Host Shutdown sits at the extreme 0.1x
-- [ ] Give `--search` a tie-breaker once all targets pass (e.g. prefer T near 35 min, even first-buy spacing, lower `costGrowth`, wider rate steps between host tiers); today a passing config scores 0 and the search has nothing left to aim for
+- [x] Improve the current balance: replaced "q4" with "A3" (`costGrowth` 1.55 to 1.3, every host rate at least 5x the previous tier). Passes every tuner target: T 31m 38s, longest gap 4m 08s
+- [x] Give `--search` a tie-breaker once all targets pass: lower `costGrowth`, then wider host rate gaps (`SEARCH` in `tools/sim/tune.js`). Lower `costGrowth` alone drove every run to the 1.05 floor, which passed the tuner but ran away after T, so the range now starts at 1.2
+- [ ] cheapestFirst finishes its Mutations at ~2h with ~28 min between each of its last three (Actin Rocket, Sugar Coating, Serial Passage); the tuner only scores greedyPayback, so this is invisible to it. Revisit after prestige changes the late game
 
 ## Developer tools
 - [x] Cheapest-first sim strategy

@@ -31,7 +31,10 @@ const TARGETS = {
 
 // What --search may change, and how.
 const SEARCH = {
-  costGrowth: [1.05, 2],  // one shared factor for every host, kept in this range
+  // One shared factor for every host, kept in this range. The floor matters: the
+  // score only covers the game up to T, and a flatter curve (1.05) passes every
+  // target while hosts pile up by the hundreds after T.
+  costGrowth: [1.2, 2],
   // Mutations whose multiplier moves as one, and only to one of `choices`.
   multGroups: [
     { ids: ["plasmidLibrary", "flagellarOverdrive", "secondChromosome", "coldShockProteins", "diplococcalPairing"], choices: [1.5, 2, 3] },
@@ -46,6 +49,22 @@ const SEARCH = {
   fixedGenerators: { ecoli: { baseCost: 10, baseRate: 1 } },
   // Each host's base rate must be at least this many times the previous host's.
   minRateStep: 5,
+  // Largest change one nudge makes to a cost, rate or costGrowth, in log space
+  // (0.35 is about +-35%).
+  maxNudge: 0.35,
+  // Host base costs never go below this.
+  minBaseCost: 1,
+  // Ranges for Mutations outside every group and not in fixedEffects.
+  freeEffects: {
+    boost: [1.05, Infinity],     // an output multiplier above 1
+    cut: [0.1, 0.9],             // a cost multiplier below 1
+    delta: [-0.06, -0.005],      // a "costGrowth" Mutation's delta
+  },
+  // On an equal score, prefer lower costGrowth (compared to this precision), then
+  // wider gaps between hosts (the smallest baseRate ratio of neighbouring tiers).
+  // Equal candidates are accepted too, so the search keeps moving once every
+  // target passes.
+  tiebreakCostGrowthStep: 0.01,
 };
 
 const REFERENCE = { name: "Active", strategy: "greedyPayback", checkEvery: 1 };
@@ -186,6 +205,23 @@ function meetsRateStep(patch, CONFIG) {
   return rates.every((r, i) => i === 0 || r >= SEARCH.minRateStep * rates[i - 1]);
 }
 
+// Smallest baseRate ratio between neighbouring host tiers.
+function minRateRatio(patch, CONFIG) {
+  const rates = CONFIG.generators.map((g) => patch.generators[g.id].baseRate);
+  return Math.min(...rates.slice(1).map((r, i) => r / rates[i]));
+}
+
+// Ranking for the search: score, then the SEARCH tiebreaks. Negative if candidate
+// a is better than b, 0 if they tie.
+function rank(a, b) {
+  if (Math.abs(a.e.score - b.e.score) > 1e-9) return a.e.score - b.e.score;
+  const step = SEARCH.tiebreakCostGrowthStep;
+  const growth = Math.round(a.patch.costGrowth / step) - Math.round(b.patch.costGrowth / step);
+  if (growth !== 0) return growth;
+  const gap = b.ratio - a.ratio;
+  return Math.abs(gap) > 1e-9 ? gap : 0;
+}
+
 // Snap a patch onto the SEARCH rules: fixed host stats, each group shares one
 // allowed multiplier (the first member's, rounded to the nearest choice),
 // costGrowth is in range, and rates are raised to clear the minimum step.
@@ -204,37 +240,39 @@ function snapToSearchRules(patch, CONFIG) {
   }
 }
 
-// Hill-climb: nudge 1-3 random levers, keep the change if the score improves.
-// Candidates must follow the config rules and the SEARCH limits.
-// Costs, rates and costGrowth move by up to +-35% (in log space); grouped
-// multipliers jump to another allowed choice. Each try takes about a second.
+// Hill-climb: nudge 1-3 random levers, keep the change unless it ranks worse
+// (see rank()). Candidates must follow the config rules and the SEARCH limits.
+// Costs, rates and costGrowth move by up to SEARCH.maxNudge (in log space);
+// grouped multipliers jump to another allowed choice. Each try takes about a second.
 function search(startPatch, minutes, CONFIG) {
-  let best = startPatch;
-  snapToSearchRules(best, CONFIG);
-  if (!followsRules(best, CONFIG)) {
+  snapToSearchRules(startPatch, CONFIG);
+  if (!followsRules(startPatch, CONFIG)) {
     console.error("warning: the starting config breaks the config rules once snapped to SEARCH; few candidates may be accepted");
   }
-  let bestEval = evaluate(best);
-  console.error(`start score ${bestEval.score.toFixed(1)}`);
+  const candidate = (patch) => ({ patch, e: evaluate(patch), ratio: minRateRatio(patch, CONFIG) });
+  let best = candidate(startPatch);
+  console.error(`start score ${best.e.score.toFixed(1)}, costGrowth ${best.patch.costGrowth.toFixed(3)}, rate step ${best.ratio.toFixed(2)}`);
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  const nudge = () => Math.exp((Math.random() * 2 - 1) * 0.35);
+  const nudge = () => Math.exp((Math.random() * 2 - 1) * SEARCH.maxNudge);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const genIds = Object.keys(best.generators);
-  const upgIds = Object.keys(best.upgrades);
+  const genIds = Object.keys(best.patch.generators);
+  const upgIds = Object.keys(best.patch.upgrades);
   // Mutations outside every group and not fixed keep a free multiplier (or delta).
   const grouped = new Set(SEARCH.multGroups.flatMap((g) => g.ids));
   const freeEffects = upgIds.filter((id) => !grouped.has(id) && !SEARCH.fixedEffects.includes(id));
   const [growthLo, growthHi] = SEARCH.costGrowth;
+  const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x));
+  const { boost, cut, delta } = SEARCH.freeEffects;
 
   const stop = Date.now() + minutes * 60 * 1000;
   let tries = 0;
   while (Date.now() < stop) {
     tries++;
-    const cand = clone(best);
+    const cand = clone(best.patch);
     const n = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       const lever = Math.floor(Math.random() * 6);
-      if (lever === 0) { const g = cand.generators[pick(genIds)]; g.baseCost = Math.max(1, g.baseCost * nudge()); }
+      if (lever === 0) { const g = cand.generators[pick(genIds)]; g.baseCost = Math.max(SEARCH.minBaseCost, g.baseCost * nudge()); }
       else if (lever === 1) { const g = cand.generators[pick(genIds)]; g.baseRate *= nudge(); }
       else if (lever === 2) { const u = cand.upgrades[pick(upgIds)]; u.cost *= nudge(); }
       else if (lever === 3) {
@@ -243,22 +281,25 @@ function search(startPatch, minutes, CONFIG) {
         for (const id of ids) cand.upgrades[id].mult = m;
       } else if (lever === 4 && freeEffects.length > 0) {
         const u = cand.upgrades[pick(freeEffects)];
-        if (u.delta !== undefined) u.delta = Math.min(-0.005, Math.max(-0.06, u.delta * nudge()));
-        else if (u.mult < 1) u.mult = Math.min(0.9, Math.max(0.1, u.mult * nudge()));
-        else u.mult = Math.max(1.05, 1 + (u.mult - 1) * nudge());
-      } else cand.costGrowth = Math.min(growthHi, Math.max(growthLo, 1 + (cand.costGrowth - 1) * nudge()));
+        if (u.delta !== undefined) u.delta = clamp(u.delta * nudge(), delta);
+        else if (u.mult < 1) u.mult = clamp(u.mult * nudge(), cut);
+        else u.mult = clamp(1 + (u.mult - 1) * nudge(), boost);
+      } else cand.costGrowth = clamp(1 + (cand.costGrowth - 1) * nudge(), [growthLo, growthHi]);
     }
     applyFixedGenerators(cand);
     if (!followsRules(cand, CONFIG) || !meetsRateStep(cand, CONFIG)) continue;
-    const e = evaluate(cand);
-    if (e.score < bestEval.score) {
-      best = cand;
-      bestEval = e;
-      console.error(`try ${tries}: score ${e.score.toFixed(1)}, T ${e.T === null ? "-" : fmt(e.T)}, gap ${fmt(e.maxGap)}, quick ${e.quick}`);
+    const c = candidate(cand);
+    const order = rank(c, best);
+    if (order <= 0) {
+      if (order < 0) {
+        const { e } = c;
+        console.error(`try ${tries}: score ${e.score.toFixed(1)}, costGrowth ${cand.costGrowth.toFixed(3)}, rate step ${c.ratio.toFixed(2)}, T ${e.T === null ? "-" : fmt(e.T)}, gap ${fmt(e.maxGap)}, quick ${e.quick}`);
+      }
+      best = c;
     }
   }
   console.error(`${tries} tries`);
-  return { patch: best, e: bestEval };
+  return best;
 }
 
 // ---------- CLI ----------

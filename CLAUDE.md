@@ -43,9 +43,9 @@ petri dish, trying to multiply as much as possible.
   milestone and wall tables; CSV goes to `tools/sim/results/` (gitignored).
 - `npm run tune` scores the early-game pacing targets (`TARGETS` in
   `tools/sim/tune.js`) PASS/FAIL. Run it after any balance change.
-- `--search` limits (fixed hosts, grouped Mutation multipliers, `costGrowth`
-  range, minimum rate step) live in `SEARCH` in `tools/sim/tune.js`; change them
-  there rather than editing the search code.
+- All `--search` limits and tiebreaks live in `SEARCH` in `tools/sim/tune.js`;
+  change them there rather than editing the search code.
+- The tuner only scores up to T; check `npm run sim` before adopting a search result.
 - Both are report-only: never change balance numbers because of a run unless
   the user asks. Details and flags: `tools/README.md`.
 - **Game logic stays pure.** Costs, production, upgrade effects and `update(dt)`
@@ -66,7 +66,7 @@ petri dish, trying to multiply as much as possible.
    passes seconds to `update(dt)`. Never assume a fixed tick length.
 4. **No magic numbers** outside `config.js`. New generators and upgrades are
    added as config entries; the UI builds from config.
-5. **Costs** grow ×1.55 per purchase and are rounded up (`ceil`).
+5. **Costs** grow by `CONFIG.costGrowth` per purchase and are rounded up (`ceil`).
    Upgrade effects are data: `effect.kind` = `"output"` | `"cost"` | `"costGrowth"`
    | `"milestone"`. Targeting is independent of kind — `targetId` hits one
    generator, `targetClass` a whole class, and neither means global.
