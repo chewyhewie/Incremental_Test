@@ -1,7 +1,5 @@
 Todo:
 1. Rapid Translation multiplies output by 1.5 because production is continous - implement tickspeed.
-2. Balance and pacing - mostly done, consider changing around generator cost, effect and scaling.
-3. Change cost and effect so each generator is impactful. Maybe reduce scaling slightly
 4. Implement first prestige
 
 Brainstorming section:
