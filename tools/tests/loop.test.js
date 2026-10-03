@@ -93,3 +93,51 @@ test("milestone bonuses are picked up by the loop as counts grow", () => {
   fn.update(1);
   assert.ok(g.num(g.state.virions) > slow, "10 hosts with a milestone beat 9 without");
 });
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+test("update(dt) adds to time played and virions produced", () => {
+  g.reset(0);
+  g.state.generators.ecoli.owned = 4;
+  const perSec = 4 * baseRate("ecoli");
+  fn.update(3);
+  fn.update(0.5);
+  near(g.state.stats.timePlayed, 3.5);
+  near(g.num(g.state.stats.totalProduced), 3.5 * perSec);
+});
+
+test("time played counts even with nothing to produce", () => {
+  g.reset(0);
+  fn.update(2);
+  near(g.state.stats.timePlayed, 2);
+  assert.equal(g.num(g.state.stats.totalProduced), 0);
+});
+
+test("best production rises with production and never falls", () => {
+  g.reset(0);
+  g.state.generators.ecoli.owned = 10;
+  fn.update(1);
+  const best = g.num(g.state.stats.bestPerSec);
+  near(best, 10 * baseRate("ecoli"));
+  g.state.generators.ecoli.owned = 2;
+  fn.update(1);
+  assert.equal(g.num(g.state.stats.bestPerSec), best, "kept the higher figure");
+});
+
+test("virions spent is produced + starting - held", () => {
+  g.reset();
+  g.state.generators.ecoli.owned = 1;
+  fn.update(100);
+  const before = g.state.virions;
+  fn.buyGenerators("ecoli", 3);
+  const spent = before.minus(g.state.virions);
+  near(g.num(fn.getVirionsSpent()), g.num(spent), "only the purchase was spent");
+});
+
+test("virions spent never shows a negative figure", () => {
+  g.reset();
+  g.state.virions = new g.Decimal(1e9); // more than was ever produced, as a migrated save can be
+  assert.equal(g.num(fn.getVirionsSpent()), 0);
+});

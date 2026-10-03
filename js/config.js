@@ -21,13 +21,16 @@ const CONFIG = {
   // An upgrade becomes visible once virions reach this fraction of its cost.
   upgradeUnlockFraction: 0.1,
 
+  // Host buy-amount toggle: a count, or "max" for as many as you can afford.
+  buyModes: [1, 10, "max"],
+
   // Loop and saving.
   tickMs: 100,                     // ~10 updates + renders per second
   autosaveMs: 30 * 1000,
   offlineCapSeconds: 8 * 60 * 60,  // 8 hours
   minOfflineSeconds: 5,            // don't bother reporting tiny gaps
   saveKey: "viralLoad.save",
-  saveVersion: 2,
+  saveVersion: 3,
 
   // Class I generators: infected bacteria.
   generators: [

@@ -18,7 +18,29 @@ function newState() {
     virions: new Decimal(CONFIG.startingVirions),
     generators,
     upgrades,
+    stats: newStats(),
   };
+}
+
+// Counters for the Stats tab. Prestige may later split these into run/lifetime.
+function newStats() {
+  return {
+    startedAt: Date.now(),          // first played (ms)
+    timePlayed: 0,                  // seconds with the game open
+    offlineSeconds: 0,              // seconds credited by offline progress
+    totalProduced: new Decimal(0),  // all virions produced, online and offline
+    bestPerSec: new Decimal(0),     // highest production seen
+    hostsBought: 0,                 // every host purchase; bulk buys count each
+  };
+}
+
+// Credit production to virions and the stats. Shared by update() and offline progress.
+function produce(perSec, seconds) {
+  const produced = perSec.times(seconds);
+  state.virions = state.virions.plus(produced);
+  state.stats.totalProduced = state.stats.totalProduced.plus(produced);
+  state.stats.bestPerSec = Decimal.max(state.stats.bestPerSec, perSec);
+  return produced;
 }
 
 function getGeneratorConfig(id) {
@@ -75,13 +97,60 @@ function getMilestoneMultiplier(gen, owned) {
   return mult;
 }
 
-function getGeneratorCost(id) {
-  const gen = getGeneratorConfig(id);
-  const owned = state.generators[id].owned;
+// One purchase's price, from factors the caller has already looked up.
+function priceAt(gen, growth, costMult, owned) {
   return new Decimal(gen.baseCost)
-    .times(Decimal.pow(getCostGrowth(gen), owned))
-    .times(getUpgradeMultiplier("cost", gen))
+    .times(Decimal.pow(growth, owned))
+    .times(costMult)
     .ceil();
+}
+
+// The price of the purchase made when `owned` are already owned.
+function getGeneratorCostAt(id, owned) {
+  const gen = getGeneratorConfig(id);
+  return priceAt(gen, getCostGrowth(gen), getUpgradeMultiplier("cost", gen), owned);
+}
+
+function getGeneratorCost(id) {
+  return getGeneratorCostAt(id, state.generators[id].owned);
+}
+
+// Total price of the next `count` purchases, equal to buying them one at a time.
+// Prices are rounded up one by one until they pass 2^53; beyond that every price
+// is already whole, so the rest is a geometric series and the cost of a huge
+// Max stays cheap to compute.
+function getBulkCost(id, count) {
+  const gen = getGeneratorConfig(id);
+  const growth = getCostGrowth(gen);
+  const costMult = getUpgradeMultiplier("cost", gen);
+  const owned = state.generators[id].owned;
+  let total = new Decimal(0);
+  let i = 0;
+  for (; i < count; i++) {
+    const cost = priceAt(gen, growth, costMult, owned + i);
+    if (cost.gt(Number.MAX_SAFE_INTEGER)) break;
+    total = total.plus(cost);
+  }
+  if (i === count) return total;
+  const series = Decimal.pow(growth, count - i).minus(1).div(growth - 1);
+  return total.plus(priceAt(gen, growth, costMult, owned + i).times(series));
+}
+
+// How many of this generator the current virions can buy in one go.
+// The geometric series (ignoring ceil) gives an upper bound; ceil can only make
+// it dearer, so step down until the exact bulk cost fits, then check the next.
+function getMaxAffordable(id) {
+  const gen = getGeneratorConfig(id);
+  const growth = getCostGrowth(gen);
+  const first = new Decimal(gen.baseCost)
+    .times(Decimal.pow(growth, state.generators[id].owned))
+    .times(getUpgradeMultiplier("cost", gen));
+  if (state.virions.lt(first)) return 0;
+  const ratio = state.virions.times(growth - 1).div(first).plus(1);
+  let n = Math.max(0, Math.floor(ratio.log10() / Math.log10(growth)));
+  while (n > 0 && !canAfford(getBulkCost(id, n))) n -= 1;
+  while (canAfford(getBulkCost(id, n + 1))) n += 1;
+  return n;
 }
 
 // Virions per second produced by ONE generator of this type.
@@ -106,6 +175,13 @@ function getTotalPerSec() {
   return total;
 }
 
+// Not stored: everything you started with or produced, minus what you still hold.
+// Clamped because saves from before stats existed only know a lower bound.
+function getVirionsSpent() {
+  const spent = state.stats.totalProduced.plus(CONFIG.startingVirions).minus(state.virions);
+  return Decimal.max(spent, 0);
+}
+
 function canAfford(cost) {
   return state.virions.gte(cost);
 }
@@ -126,12 +202,19 @@ function checkUnlocks() {
   }
 }
 
-function buyGenerator(id) {
-  const cost = getGeneratorCost(id);
+// Buy exactly `count` (all or nothing).
+function buyGenerators(id, count) {
+  if (count < 1) return false;
+  const cost = getBulkCost(id, count);
   if (!canAfford(cost)) return false;
   state.virions = state.virions.minus(cost);
-  state.generators[id].owned += 1;
+  state.generators[id].owned += count;
+  state.stats.hostsBought += count;
   return true;
+}
+
+function buyGenerator(id) {
+  return buyGenerators(id, 1);
 }
 
 function buyUpgrade(id) {

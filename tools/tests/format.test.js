@@ -63,6 +63,8 @@ test("formatDuration uses hours, minutes or seconds as appropriate", () => {
   assert.equal(g.fn.formatDuration(3600), "1h 0m");
   assert.equal(g.fn.formatDuration(3725), "1h 2m");
   assert.equal(g.fn.formatDuration(8 * 3600), "8h 0m");
+  assert.equal(g.fn.formatDuration(86400), "1d 0h");
+  assert.equal(g.fn.formatDuration(2 * 86400 + 3 * 3600 + 59), "2d 3h");
 });
 
 test("formatDuration floors fractional seconds", () => {

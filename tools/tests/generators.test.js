@@ -261,3 +261,105 @@ test("buying is affordable exactly at the cost, not a virion below", () => {
   assert.equal(fn.buyGenerator("ecoli"), true);
   assert.equal(g.num(g.state.virions), 0);
 });
+
+// ---------------------------------------------------------------------------
+// Bulk buying (×10 / Max)
+// ---------------------------------------------------------------------------
+
+// Reference: how many single buys a greedy loop manages, and what they cost.
+function greedySingles(iso, id, virions, setup = () => {}) {
+  iso.reset(virions);
+  setup(iso.state);
+  const before = iso.state.virions;
+  let n = 0;
+  while (iso.fn.buyGenerator(id)) n++;
+  return { n, spent: before.minus(iso.state.virions) };
+}
+
+test("getBulkCost of 1 is the single cost", () => {
+  g.reset();
+  for (const gen of CONFIG.generators) {
+    g.state.generators[gen.id].owned = 6;
+    assert.equal(g.str(fn.getBulkCost(gen.id, 1)), g.str(fn.getGeneratorCost(gen.id)), gen.id);
+  }
+});
+
+test("getBulkCost equals buying one at a time, rounding included", () => {
+  const withShutdown = (s) => {
+    s.generators.salmonella.owned = 3;
+    s.upgrades.hostShutdown.owned = true;
+  };
+  // Small enough that every value stays exact in a double.
+  const ref = greedySingles(loadGame(), "salmonella", "1e7", withShutdown);
+  assert.ok(ref.n >= 10, "enough virions for ten");
+  g.reset("1e7");
+  withShutdown(g.state);
+  const bulk = fn.getBulkCost("salmonella", ref.n);
+  assert.equal(g.str(bulk), g.str(ref.spent));
+});
+
+test("buyGenerators deducts the bulk cost and adds the count", () => {
+  g.reset();
+  const cost = fn.getBulkCost("ecoli", 10);
+  g.state.virions = cost;
+  assert.equal(fn.buyGenerators("ecoli", 10), true);
+  assert.equal(g.state.generators.ecoli.owned, 10);
+  assert.equal(g.num(g.state.virions), 0);
+});
+
+test("buyGenerators is all or nothing", () => {
+  g.reset();
+  const short = fn.getBulkCost("ecoli", 10).minus(1);
+  g.state.virions = short;
+  assert.equal(fn.buyGenerators("ecoli", 10), false);
+  assert.equal(g.state.generators.ecoli.owned, 0);
+  assert.equal(g.str(g.state.virions), g.str(short), "virions untouched");
+});
+
+test("buyGenerators refuses a count below 1", () => {
+  g.reset(1e6);
+  assert.equal(fn.buyGenerators("ecoli", 0), false);
+  assert.equal(g.state.generators.ecoli.owned, 0);
+});
+
+test("getMaxAffordable is 0 when even one is out of reach", () => {
+  g.reset(gen("ecoli").baseCost - 1);
+  assert.equal(fn.getMaxAffordable("ecoli"), 0);
+});
+
+test("getMaxAffordable matches buying singles until broke", () => {
+  const setups = {
+    plain: () => {},
+    owned: (s) => { s.generators.cholerae.owned = 17; },
+    discounted: (s) => { s.generators.cholerae.owned = 5; s.upgrades.hostShutdown.owned = true; },
+  };
+  for (const [name, setup] of Object.entries(setups)) {
+    for (const virions of ["4300", "1e5", "123456789", "1e15", "7.7e42"]) {
+      const ref = greedySingles(loadGame(), "cholerae", virions, setup);
+      g.reset(virions);
+      setup(g.state);
+      assert.equal(fn.getMaxAffordable("cholerae"), ref.n, `${name} at ${virions}`);
+    }
+  }
+});
+
+test("getMaxAffordable is exact at the boundary", () => {
+  g.reset();
+  g.state.generators.ecoli.owned = 4;
+  const cost7 = fn.getBulkCost("ecoli", 7);
+  g.state.virions = cost7;
+  assert.equal(fn.getMaxAffordable("ecoli"), 7);
+  g.state.virions = cost7.minus(1);
+  assert.equal(fn.getMaxAffordable("ecoli"), 6);
+});
+
+test("hostsBought counts every host, bulk buys included", () => {
+  g.reset(1e9);
+  fn.buyGenerator("ecoli");
+  assert.equal(g.state.stats.hostsBought, 1);
+  fn.buyGenerators("salmonella", 10);
+  assert.equal(g.state.stats.hostsBought, 11);
+  g.state.virions = new g.Decimal(0);
+  assert.equal(fn.buyGenerators("ecoli", 10), false);
+  assert.equal(g.state.stats.hostsBought, 11, "a refused buy counts nothing");
+});

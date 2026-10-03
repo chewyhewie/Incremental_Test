@@ -1,4 +1,4 @@
-// Save/load: round trip, the v1 -> v2 migration, offline progress, reset.
+// Save/load: round trip, migrations (v1 -> v2 -> v3), offline progress, reset.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -348,4 +348,98 @@ test("offline progress reveals anything the new total affords", () => {
   g.state.lastSaved = Date.now() - 60 * 1000; // enough to pass V. cholerae's threshold
   g.fn.applyOfflineProgress();
   assert.equal(g.state.generators.cholerae.unlocked, true, "cholerae revealed");
+});
+
+// ---------------------------------------------------------------------------
+// Stats (save v3)
+// ---------------------------------------------------------------------------
+
+test("stats round trip, Decimals included", () => {
+  const g = loadGame();
+  g.reset();
+  Object.assign(g.state.stats, {
+    startedAt: 1_700_000_000_000, timePlayed: 1234.5, offlineSeconds: 600, hostsBought: 42,
+    totalProduced: new g.Decimal("9.87e450"), bestPerSec: new g.Decimal("1.5e200"),
+  });
+  const raw = JSON.parse(g.fn.atob(g.fn.encodeSave(g.state)));
+  assert.equal(typeof raw.stats.totalProduced, "string", "Decimals stored as strings");
+  const s = g.fn.decodeSave(g.fn.encodeSave(g.state)).stats;
+  assert.equal(s.startedAt, 1_700_000_000_000);
+  assert.equal(s.timePlayed, 1234.5);
+  assert.equal(s.offlineSeconds, 600);
+  assert.equal(s.hostsBought, 42);
+  assert.ok(s.totalProduced instanceof g.Decimal);
+  assert.equal(s.totalProduced.toString(), "9.87e+450");
+  assert.equal(s.bestPerSec.toString(), "1.5e+200");
+});
+
+test("a v2 save gets stats backfilled from what it knows", () => {
+  const g = loadGame();
+  const v2 = {
+    version: 2, lastSaved: 1_700_000_000_000, virions: "5000",
+    generators: { ecoli: { owned: 7, unlocked: true }, salmonella: { owned: 2, unlocked: true } },
+    upgrades: {},
+  };
+  const s = g.fn.decodeSave(g.fn.btoa(JSON.stringify(v2))).stats;
+  assert.equal(s.startedAt, v2.lastSaved);
+  assert.equal(s.hostsBought, 9);
+  assert.equal(s.totalProduced.toString(), "5000", "at least what is held");
+  assert.equal(s.timePlayed, 0);
+  assert.equal(s.offlineSeconds, 0);
+  assert.equal(g.num(s.bestPerSec), 0);
+});
+
+test("a v1 save migrates all the way to current stats", () => {
+  const g = loadGame();
+  const s = g.fn.decodeSave(encodeV1(g)).stats;
+  assert.equal(s.hostsBought, 9);
+  assert.equal(s.totalProduced.toString(), V1_SAVE.virions);
+  assert.equal(s.startedAt, V1_SAVE.lastSaved);
+});
+
+test("bad stat values fall back to defaults instead of breaking the load", () => {
+  const g = loadGame();
+  const bad = {
+    version: g.CONFIG.saveVersion, lastSaved: 1_700_000_000_000, virions: "10",
+    generators: {}, upgrades: {},
+    stats: {
+      startedAt: "yesterday", timePlayed: -5, offlineSeconds: null, hostsBought: "lots",
+      totalProduced: "Infinity", bestPerSec: "-3",
+    },
+  };
+  const s = g.fn.decodeSave(g.fn.btoa(JSON.stringify(bad))).stats;
+  assert.equal(s.startedAt, bad.lastSaved);
+  assert.equal(s.timePlayed, 0);
+  assert.equal(s.offlineSeconds, 0);
+  assert.equal(s.hostsBought, 0);
+  assert.equal(g.num(s.totalProduced), 0);
+  assert.equal(g.num(s.bestPerSec), 0);
+
+  const missing = { ...bad, stats: "nope" };
+  assert.doesNotThrow(() => g.fn.decodeSave(g.fn.btoa(JSON.stringify(missing))));
+});
+
+test("offline progress counts toward produced, time away and best production", () => {
+  const g = loadGame();
+  g.reset(0);
+  g.state.generators.ecoli.owned = 10;
+  g.state.lastSaved = Date.now() - 60 * 1000;
+  const result = g.fn.applyOfflineProgress();
+  assert.equal(g.state.stats.totalProduced.toString(), result.gained.toString());
+  assert.equal(g.state.stats.offlineSeconds, result.seconds);
+  assert.equal(g.state.stats.timePlayed, 0, "time away is not time played");
+  assert.equal(g.state.stats.bestPerSec.toString(), g.fn.getTotalPerSec().toString());
+});
+
+test("hard reset zeroes the stats", () => {
+  const g = loadGame();
+  g.reset(1e6);
+  g.state.generators.ecoli.owned = 5;
+  g.fn.update(100);
+  g.fn.buyGenerator("ecoli");
+  g.fn.hardReset();
+  assert.equal(g.state.stats.timePlayed, 0);
+  assert.equal(g.state.stats.hostsBought, 0);
+  assert.equal(g.num(g.state.stats.totalProduced), 0);
+  assert.equal(g.num(g.state.stats.bestPerSec), 0);
 });

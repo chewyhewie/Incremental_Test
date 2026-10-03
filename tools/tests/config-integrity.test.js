@@ -203,3 +203,11 @@ test("each Mutation's description states its current effect size", () => {
     }
   }
 });
+
+test("buyModes are distinct whole counts of at least 1, or \"max\"", () => {
+  assert.ok(CONFIG.buyModes.length > 0, "at least one buy mode");
+  assert.equal(new Set(CONFIG.buyModes).size, CONFIG.buyModes.length, "no duplicates");
+  for (const mode of CONFIG.buyModes) {
+    assert.ok(mode === "max" || (Number.isInteger(mode) && mode >= 1), `bad buy mode ${mode}`);
+  }
+});

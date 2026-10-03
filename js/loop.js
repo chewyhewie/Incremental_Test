@@ -5,7 +5,8 @@ let lastTick = Date.now();
 // Advance the simulation by dt seconds.
 function update(dt) {
   if (!(dt > 0)) return;
-  state.virions = state.virions.plus(getTotalPerSec().times(dt));
+  produce(getTotalPerSec(), dt);
+  state.stats.timePlayed += dt;
   checkUnlocks();
 }
 

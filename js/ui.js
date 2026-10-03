@@ -4,7 +4,8 @@
 const uiState = {
   notice: null,          // "While you were away..." text, or null
   settingsMessage: "",
-  activeTab: "generators", // "generators" | "upgrades" | "settings"
+  activeTab: "generators", // "generators" | "upgrades" | "stats" | "settings"
+  buyMode: CONFIG.buyModes[0], // an entry of CONFIG.buyModes: a count or "max"
 };
 
 const els = {
@@ -12,7 +13,25 @@ const els = {
   upgrades: {},
   tabs: {},       // tab key -> tab button
   tabPanels: {},  // tab key -> panel section
+  buyModes: [],   // [{ mode, button }] for the host buy-amount toggle
+  stats: [],      // <dd> value cells, matching STAT_ROWS
 };
+
+// Rows of the Stats tab, in display order.
+const STAT_ROWS = [
+  { label: "Time played", value: () => formatDuration(state.stats.timePlayed) },
+  { label: "Time away (credited)", value: () => formatDuration(state.stats.offlineSeconds) },
+  { label: "Playing since", value: () => new Date(state.stats.startedAt).toLocaleDateString(undefined, { dateStyle: "medium" }) },
+  { label: "Virions produced", value: () => formatNumber(state.stats.totalProduced) },
+  { label: "Virions spent", value: () => formatNumber(getVirionsSpent()) },
+  { label: "Current production", value: () => `${formatRate(getTotalPerSec())} / sec` },
+  { label: "Best production", value: () => `${formatRate(state.stats.bestPerSec)} / sec` },
+  { label: "Hosts infected", value: () => formatNumber(state.stats.hostsBought) },
+  {
+    label: "Mutations acquired",
+    value: () => `${CONFIG.upgrades.filter((u) => state.upgrades[u.id].owned).length} / ${CONFIG.upgrades.length}`,
+  },
+];
 
 // ---------- Formatting ----------
 
@@ -35,9 +54,11 @@ function formatRate(value) {
 
 function formatDuration(totalSeconds) {
   const s = Math.floor(totalSeconds);
-  const h = Math.floor(s / 3600);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
@@ -76,6 +97,19 @@ function buildUI() {
     });
   }
 
+  const buyModeGroup = document.getElementById("buy-mode");
+  for (const mode of CONFIG.buyModes) {
+    const button = el("button", "buy-mode-btn", mode === "max" ? "Max" : `×${mode}`);
+    button.type = "button";
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", () => {
+      uiState.buyMode = mode;
+      render();
+    });
+    buyModeGroup.append(button);
+    els.buyModes.push({ mode, button });
+  }
+
   const genList = document.getElementById("generator-list");
   for (const gen of CONFIG.generators) {
     const row = el("div", "card");
@@ -91,12 +125,19 @@ function buildUI() {
     const button = el("button", "buy");
     button.type = "button";
     button.addEventListener("click", () => {
-      if (buyGenerator(gen.id)) render();
+      if (buyGenerators(gen.id, buyCount(gen.id))) render();
     });
 
     row.append(info, button);
     genList.append(row);
     els.generators[gen.id] = { row, owned, output, button };
+  }
+
+  const statsList = document.getElementById("stats-list");
+  for (const stat of STAT_ROWS) {
+    const value = el("dd");
+    statsList.append(el("dt", "", stat.label), value);
+    els.stats.push(value);
   }
 
   const upgList = document.getElementById("upgrade-list");
@@ -124,6 +165,11 @@ function buildUI() {
   document.getElementById("export-btn").addEventListener("click", onExport);
   document.getElementById("import-btn").addEventListener("click", onImport);
   document.getElementById("reset-btn").addEventListener("click", onHardReset);
+}
+
+// How many hosts one click buys in the current buy mode. Max can be 0.
+function buyCount(id) {
+  return uiState.buyMode === "max" ? getMaxAffordable(id) : uiState.buyMode;
 }
 
 // ---------- Settings handlers ----------
@@ -187,19 +233,30 @@ function render() {
     if (els.tabPanels[key].hidden === active) els.tabPanels[key].hidden = !active;
   }
 
+  for (const { mode, button } of els.buyModes) {
+    const active = mode === uiState.buyMode;
+    if (button.classList.contains("active") !== active) {
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+  }
+
   for (const gen of CONFIG.generators) {
     const g = state.generators[gen.id];
     const e = els.generators[gen.id];
     e.row.hidden = !g.unlocked;
     if (!g.unlocked) continue;
 
-    const cost = getGeneratorCost(gen.id);
+    // Max with nothing affordable still prices the next single host.
+    const count = Math.max(1, buyCount(gen.id));
+    const cost = getBulkCost(gen.id, count);
     setText(e.owned, `×${g.owned}`);
     setText(
       e.output,
       `${formatRate(getGeneratorRate(gen.id))}/s each · ${formatRate(getGeneratorOutput(gen.id))}/s total`
     );
-    setText(e.button, `Infect · ${formatNumber(cost)}`);
+    const amount = uiState.buyMode === 1 ? "" : ` ×${count}`;
+    setText(e.button, `Infect${amount} · ${formatNumber(cost)}`);
     e.button.disabled = !canAfford(cost);
   }
 
@@ -216,6 +273,10 @@ function render() {
     e.button.disabled = u.owned || !canAfford(new Decimal(upg.cost));
   }
   els.upgradeEmpty.hidden = anyUpgradeVisible;
+
+  if (uiState.activeTab === "stats") {
+    STAT_ROWS.forEach((stat, i) => setText(els.stats[i], stat.value()));
+  }
 
   els.notice.hidden = !uiState.notice;
   if (uiState.notice) setText(els.noticeText, uiState.notice);

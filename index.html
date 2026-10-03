@@ -37,11 +37,15 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" aria-selected="false" class="tab" data-tab="generators" aria-controls="tab-generators">Hosts</button>
       <button type="button" role="tab" aria-selected="false" class="tab" data-tab="upgrades" aria-controls="tab-upgrades">Mutations</button>
+      <button type="button" role="tab" aria-selected="false" class="tab" data-tab="stats" aria-controls="tab-stats">Stats</button>
       <button type="button" role="tab" aria-selected="false" class="tab" data-tab="settings" aria-controls="tab-settings">Settings</button>
     </nav>
 
     <section id="tab-generators" class="panel" role="tabpanel" data-tab-panel="generators">
-      <h2>Class I Hosts <span class="sub">infected bacteria</span></h2>
+      <div class="panel-head">
+        <h2>Class I Hosts <span class="sub">infected bacteria</span></h2>
+        <div id="buy-mode" class="buy-mode" role="group" aria-label="Buy amount"></div>
+      </div>
       <div id="generator-list" class="list"></div>
     </section>
 
@@ -49,6 +53,11 @@
       <h2>Mutations <span class="sub">one-time upgrades</span></h2>
       <div id="upgrade-list" class="list"></div>
       <p id="upgrade-empty" class="empty">No mutations within reach yet. Keep multiplying.</p>
+    </section>
+
+    <section id="tab-stats" class="panel" role="tabpanel" data-tab-panel="stats" hidden>
+      <h2>Statistics <span class="sub">lab notebook</span></h2>
+      <dl id="stats-list" class="stats"></dl>
     </section>
 
     <section id="tab-settings" class="panel settings" role="tabpanel" data-tab-panel="settings" hidden>
