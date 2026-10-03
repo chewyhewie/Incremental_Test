@@ -32,6 +32,10 @@ petri dish, trying to multiply as much as possible.
 - `js/ui.js`: `buildUI()`, `render()`, number formatting, settings handlers
 - `js/main.js`: startup
 - `docs/roadmap.md`: future ideas for use and to be maintained by Claude
+- `docs/prestige.md`: design for the Recombination prestige layer (equations, phases,
+  decisions). Maintained by Claude; keep it consistent with `roadmap.md`'s phase list.
+- `docs/prestige-review.md`: dated review of `prestige.md`. Treat it as a record: add
+  notes about later decisions rather than rewriting its findings.
 - `docs/prestige.md`: prestige (Recombination) design, maintained by Claude. Superseded
   designs move verbatim to its "Alternatives considered" section; never delete them
 - `docs/todo.md`: notes for use and to be maintained by user. This file should NOT be edited by Claude, but it should be merged in all commits.

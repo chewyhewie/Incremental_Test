@@ -3,15 +3,16 @@
 Ideas for after the prototype. Not in priority order, except that prestige is next.
 
 ## Prestige: Recombination (next)
-Once every Mutation is owned (~30-45 min for greedyPayback) only hosts are left to
+Once every Mutation is owned (~30–45 min for greedyPayback) only hosts are left to
 buy, and the sim shows ever-longer walls from about 1h 15m. Prestige fills that gap.
 Full design, equations and numbers: [prestige.md](prestige.md). Build phases:
 - [ ] Core loop: RP from virions produced this run (`floor(sqrt(P_run / 1e9))`), Recombine reset, passive output bonus from lifetime RP, run/lifetime stats, save v4, multi-run sim
-- [ ] Self-replication: first RP perk (Lysogenic Takeover); hosts grow Gompertz colonies (colony size c = 1000) with closed-form production via the exponential integral, so no tickspeed is needed
-- [ ] Host anti-viral defence: clearance rate that steps up with lab alerts; `growth` / `capacity` / `clearance` effect kinds; first gated Mutations
+- [ ] Self-replication: first RP perk (Lysogenic Takeover); hosts grow Gompertz colonies (colony size c = 10) with closed-form production via the exponential integral, so no tickspeed is needed. Ship together with the core loop: without Lysogenic Takeover the first reset is a pure loss
+- [ ] Gated Mutations: `growth` / `capacity` effect kinds, `requires` gating, first gated Mutations
 - [ ] Shop breadth: Viral Memory, Primed Inoculum, Lab Contacts, Genome Compression, Cold Storage, Recombinase, colony upgrades
 - [ ] Automation: host and Mutation autobuyers, auto-Recombine
-- [ ] Later: coupled colony mechanics (Horizontal Gene Transfer, Adaptive Immunity) with substep integration
+- [ ] Later: coupled colony mechanics (Horizontal Gene Transfer) with substep integration
+- [ ] Opt-in challenges: host defences (lab alerts, clearance upgrades, Adaptive Immunity) as challenge runs. Skeleton only, needs more design ([prestige.md §8](prestige.md#8-opt-in-challenges-host-defences-skeleton))
 
 ## Replication speed (tickspeed)
 Superseded by the colony design: production has closed forms, so "replication speed"
@@ -51,7 +52,8 @@ N(t)     = (N₀^q + q·g·t)^(1/q)
   | 0.75 | 19 | 521 | 1.5e5 | 2.0e6 | 4.5e8 |
   | 0.9 | 25 | 8.1e3 | 1.9e9 | 8.9e11 | 5.0e17 |
 
-**Limiters act on the exponent.** Lab alerts lower p (e.g. −0.05 each): the colony keeps
+**Limiters act on the exponent.** Lab alerts, if this layer uses them (in Recombination they
+are an opt-in challenge), lower p (e.g. −0.05 each): the colony keeps
 its cells and future growth bends lower, so there's no sudden drop (1e6 cells at 2.8 h
 instead of 1.7 h). Unlike exponential, an alert changes the curve's degree, and that
 stacks with the built-in slowdown. Clamp p to [pMin, pMax ≈ 0.85]. This bounds runaway
