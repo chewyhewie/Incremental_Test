@@ -32,6 +32,8 @@ petri dish, trying to multiply as much as possible.
 - `js/ui.js`: `buildUI()`, `render()`, number formatting, settings handlers
 - `js/main.js`: startup
 - `docs/roadmap.md`: future ideas for use and to be maintained by Claude
+- `docs/prestige.md`: prestige (Recombination) design, maintained by Claude. Superseded
+  designs move verbatim to its "Alternatives considered" section; never delete them
 - `docs/todo.md`: notes for use and to be maintained by user. This file should NOT be edited by Claude, but it should be merged in all commits.
 - `tools/`: developer tooling, never shipped. `tools/tests/` is the `npm test`
   suite (`node:test`, no dependencies); see `tools/README.md`. `tools/sim/` is
@@ -89,6 +91,11 @@ petri dish, trying to multiply as much as possible.
    load), but players who owned it lose it with no refund.
 9. **Offline progress** = production × time since `lastSaved`, capped at 8h,
    reported in the "While you were away..." notice.
+   **All production goes through `produce(perSec, seconds)`** (`state.js`): both
+   `update(dt)` and offline progress use it, so virions and `state.stats`
+   (virions produced, best production) stay in step. Any new production path
+   (colonies, autobuyers, prestige) must use it too, or the Stats tab and anything
+   based on virions produced (the planned RP formula) silently go wrong.
 10. There is no click-to-earn action by design.
 11. **Mutation descriptions state their effect sizes** ("2.5x virions"), so
     change the text whenever the number changes. A config-integrity test checks it.
